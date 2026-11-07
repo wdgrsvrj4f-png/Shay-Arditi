@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f7f3" />
+    <title>התקציב שלי</title>
+    <style>
+      :root { color-scheme: light; --ink:#1f3026; --muted:#718075; --line:#e3ebe3; --green:#26754d; --green2:#42956a; --paper:#fff; --canvas:#f4f7f3; --red:#a43c35; }
+      *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Arial",sans-serif;-webkit-font-smoothing:antialiased}button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}.wrap{width:min(100% - 28px,470px);margin:30px auto 52px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.brand{display:flex;align-items:center;gap:11px}.mark{width:42px;height:42px;display:grid;place-items:center;border-radius:14px;background:var(--green);color:white;font-size:21px}.brand h1{font-size:21px;margin:0;font-weight:750}.today{font-size:13px;color:var(--muted)}.month{font-size:13px;color:#59695e;border:1px solid var(--line);border-radius:12px;background:#fff;padding:8px 10px;white-space:nowrap}
+      .hero{padding:23px;border:1px solid var(--line);border-radius:21px;background:#fff;box-shadow:0 10px 28px #203b2910}.label{font-size:14px;color:var(--muted)}.amount{font-size:49px;font-weight:750;letter-spacing:-1.4px;line-height:1.2;margin:5px 0}.sub{font-size:13px;color:var(--muted)}.bar{height:9px;background:#e8eee8;border-radius:20px;margin:20px 0 8px;overflow:hidden}.bar i{display:block;width:0;height:100%;background:var(--green2);border-radius:inherit;transition:width .2s}.bartext{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:12px}.actions{display:flex;gap:10px;margin-top:18px}.add{flex:1;border:0;border-radius:14px;background:var(--green);color:#fff;font-weight:700;padding:14px;font-size:15px}.edit{border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--green);font-weight:650;padding:0 14px;font-size:13px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:13px}.stat{padding:14px 15px;border:1px solid var(--line);border-radius:15px;background:#fff}.stat small{font-size:12px;color:var(--muted)}.stat strong{display:block;font-size:20px;margin-top:2px}.heading{font-size:16px;margin:24px 2px 10px}.list{display:grid;gap:8px}.row{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 12px}.icon{width:39px;height:39px;display:grid;place-items:center;flex:none;border-radius:12px;background:#f2f5eb;color:#52735c;font-size:18px}.details{flex:1;min-width:0}.name{font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.date{font-size:12px;color:#839087}.spent{font-size:14px;font-weight:700;white-space:nowrap}.remove{width:29px;height:29px;display:grid;place-items:center;border:0;border-radius:9px;background:#f6f8f6;color:#89938a;font-size:18px;line-height:1}.empty{padding:21px 15px;border:1px dashed #ced9cf;border-radius:14px;color:var(--muted);background:#ffffff90;text-align:center;font-size:13px}.notice{text-align:center;color:#95a097;font-size:11px;margin:17px 0 0}
+      dialog{width:min(100% - 24px,410px);padding:0;border:0;border-radius:20px;color:var(--ink);box-shadow:0 22px 70px #11281b35}dialog::backdrop{background:#15251c66;backdrop-filter:blur(2px)}.form{padding:22px}.formhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}.formhead h2{font-size:19px;margin:0}.close{border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--muted);width:34px;height:34px;font-size:20px}.field{display:grid;gap:6px;margin-top:13px}.field label{font-size:13px;font-weight:600;color:#59685d}.field input{width:100%;height:47px;border:1px solid #dce5dc;border-radius:12px;padding:0 12px;outline:none;background:#fff;color:var(--ink)}.field input:focus{border-color:var(--green);box-shadow:0 0 0 3px #26754d18}.field input[type=number]{direction:ltr;text-align:right}.save{width:100%;height:49px;margin-top:20px;border:0;border-radius:13px;background:var(--green);color:#fff;font-weight:700}.over .amount{color:var(--red)}.over .bar i{background:#d45b51}
+      @media(max-width:380px){.wrap{width:calc(100% - 22px);margin-top:20px}.hero{padding:19px}.amount{font-size:43px}.month{font-size:12px;padding:7px 8px}.edit{padding:0 10px}}
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="top">
+        <div class="brand"><div class="mark" aria-hidden="true">₪</div><div><h1>התקציב שלי</h1><div class="today" id="today"></div></div></div>
+        <div class="month" id="month"></div>
+      </header>
+      <section class="hero" id="hero">
+        <div class="label" id="hero-label">נשאר לך להוציא החודש</div>
+        <div class="amount" id="remaining">₪0</div>
+        <div class="sub" id="budget-sub">קבע תקציב חודשי כדי להתחיל</div>
+        <div class="bar"><i id="progress"></i></div>
+        <div class="bartext"><span id="spent-caption">הוצאות: ₪0</span><span id="percent">0%</span></div>
+        <div class="actions"><button class="add" id="add" disabled>＋ הוספת הוצאה</button><button class="edit" id="edit" disabled>עריכת התקציב</button></div>
+      </section>
+      <section class="stats" aria-label="סיכום חודשי"><div class="stat"><small>הוצאות החודש</small><strong id="spent">₪0</strong></div><div class="stat"><small>התקציב החודשי</small><strong id="budget">₪0</strong></div></section>
+      <h2 class="heading">הוצאות אחרונות</h2>
+      <section class="list" id="list" aria-label="הוצאות אחרונות"></section>
+      <p class="notice" id="sync-status" role="status">כרגע נשמר בדפדפן הזה בלבד</p>
+    </main>
+
+    <dialog id="expense-dialog"><form class="form" id="expense-form"><div class="formhead"><h2>הוצאה חדשה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label for="expense-name">על מה הוצאת?</label><input id="expense-name" name="name" maxlength="60" placeholder="למשל: קניות בסופר" required /></div><div class="field"><label for="expense-amount">כמה?</label><input id="expense-amount" name="amount" type="number" min="0.01" step="0.01" placeholder="0" required /></div><button class="save" type="submit">שמירת ההוצאה</button></form></dialog>
+    <dialog id="budget-dialog"><form class="form" id="budget-form"><div class="formhead"><h2>תקציב חודשי</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label for="budget-input">כמה תרצה להוציא החודש?</label><input id="budget-input" name="amount" type="number" min="0" step="1" placeholder="0" required /></div><button class="save" type="submit">שמירת התקציב</button></form></dialog>
+
+    <script>
+      const KEY = 'simple-budget-v1';
+      const API = '/api/budget';
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const money = n => new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
+      const readStore = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{"months":{}}'); } catch { return { months: {} }; } };
+      const normalizeStore = value => value && typeof value === 'object' && value.months && typeof value.months === 'object' ? value : { months: {} };
+      const localStore = normalizeStore(readStore());
+      const localHasData = Object.values(localStore.months).some(month => Number(month?.budget) > 0 || (month?.expenses?.length || 0) > 0);
+      let store = localStore;
+      let cloudActive = false;
+      const ensureCurrentMonth = () => {
+        if (!store.months[monthKey]) store.months[monthKey] = { budget: 0, expenses: [] };
+        monthData = store.months[monthKey];
+      };
+      let monthData;
+      ensureCurrentMonth();
+      const setStatus = message => { document.querySelector('#sync-status').textContent = message; };
+      const saveLocal = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch {} };
+      async function saveStore() {
+        saveLocal();
+        if (!cloudActive) { setStatus('נשמר בדפדפן הזה בלבד · הענן עדיין לא מחובר'); return; }
+        setStatus('מסנכרן…');
+        try {
+          const response = await fetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(store) });
+          if (!response.ok) throw new Error('sync failed');
+          setStatus('מסונכרן לענן · כל מי שיגיע לאתר יכול לראות ולערוך');
+        } catch {
+          setStatus('הסנכרון נכשל · השינוי נשמר בדפדפן הזה');
+        }
+      }
+      async function connectCloud() {
+        const buttons = [document.querySelector('#add'), document.querySelector('#edit')];
+        if (location.protocol !== 'http:' && location.protocol !== 'https:') {
+          setStatus('נשמר בדפדפן הזה בלבד · הענן עדיין לא מחובר');
+          buttons.forEach(button => { button.disabled = false; });
+          return;
+        }
+        try {
+          const response = await fetch(API, { cache: 'no-store' });
+          if (!response.ok) throw new Error('cloud unavailable');
+          const remoteStore = normalizeStore(await response.json());
+          const remoteHasData = Object.values(remoteStore.months).some(month => Number(month?.budget) > 0 || (month?.expenses?.length || 0) > 0);
+          if (remoteHasData) store = remoteStore;
+          else if (localHasData) store = localStore;
+          else store = remoteStore;
+          cloudActive = true;
+          ensureCurrentMonth();
+          saveLocal();
+          render();
+          if (localHasData && !remoteHasData) await saveStore();
+          else setStatus('מסונכרן לענן · כל מי שיגיע לאתר יכול לראות ולערוך');
+        } catch {
+          cloudActive = false;
+          setStatus('הענן לא מחובר כרגע · נשמר בדפדפן הזה בלבד');
+        } finally {
+          buttons.forEach(button => { button.disabled = false; });
+        }
+      }
+      const dateNow = now;
+      document.querySelector('#today').textContent = new Intl.DateTimeFormat('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }).format(dateNow);
+      document.querySelector('#month').textContent = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric' }).format(dateNow);
+      const expenseDialog = document.querySelector('#expense-dialog');
+      const budgetDialog = document.querySelector('#budget-dialog');
+      function render() {
+        const spent = monthData.expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+        const remaining = Number(monthData.budget) - spent;
+        const percent = monthData.budget > 0 ? Math.round((spent / monthData.budget) * 100) : 0;
+        document.querySelector('#remaining').textContent = money(Math.abs(remaining));
+        document.querySelector('#hero-label').textContent = remaining < 0 ? 'חרגת מהתקציב ב־' : 'נשאר לך להוציא החודש';
+        document.querySelector('#budget-sub').textContent = monthData.budget > 0 ? `מתוך תקציב חודשי של ${money(monthData.budget)}` : 'קבע תקציב חודשי כדי להתחיל';
+        document.querySelector('#spent-caption').textContent = `הוצאות: ${money(spent)}`;
+        document.querySelector('#percent').textContent = `${percent}%`;
+        document.querySelector('#progress').style.width = `${Math.min(percent, 100)}%`;
+        document.querySelector('#spent').textContent = money(spent);
+        document.querySelector('#budget').textContent = money(monthData.budget);
+        document.querySelector('#hero').classList.toggle('over', remaining < 0);
+        const list = document.querySelector('#list');
+        list.replaceChildren();
+        [...monthData.expenses].sort((a,b) => b.createdAt - a.createdAt).slice(0, 8).forEach(item => {
+          const row = document.createElement('article'); row.className = 'row';
+          row.innerHTML = '<div class="icon" aria-hidden="true">₪</div><div class="details"><div class="name"></div><div class="date"></div></div><div class="spent"></div><button class="remove" type="button" aria-label="מחיקת ההוצאה">×</button>';
+          row.querySelector('.name').textContent = item.name;
+          row.querySelector('.date').textContent = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'short' }).format(new Date(item.createdAt));
+          row.querySelector('.spent').textContent = `−${money(item.amount)}`;
+          row.querySelector('.remove').addEventListener('click', () => { monthData.expenses = monthData.expenses.filter(x => x.id !== item.id); render(); void saveStore(); });
+          list.append(row);
+        });
+        if (!monthData.expenses.length) list.innerHTML = '<div class="empty">עוד לא הוספת הוצאות החודש.<br>כשתוסיף, הן יופיעו כאן.</div>';
+      }
+      document.querySelector('#add').addEventListener('click', () => expenseDialog.showModal());
+      document.querySelector('#edit').addEventListener('click', () => { document.querySelector('#budget-input').value = monthData.budget || ''; budgetDialog.showModal(); });
+      document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
+      document.querySelector('#expense-form').addEventListener('submit', event => {
+        event.preventDefault(); const data = new FormData(event.currentTarget);
+        monthData.expenses.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), name: String(data.get('name')).trim(), amount: Number(data.get('amount')), createdAt: Date.now() });
+        event.currentTarget.reset(); expenseDialog.close(); render(); void saveStore();
+      });
+      document.querySelector('#budget-form').addEventListener('submit', event => {
+        event.preventDefault(); monthData.budget = Number(new FormData(event.currentTarget).get('amount'));
+        budgetDialog.close(); render(); void saveStore();
+      });
+      render();
+      void connectCloud();
+    </script>
+  </body>
+</html>
