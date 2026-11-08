@@ -271,7 +271,7 @@ return async function handler(request) {
   const methodNames = { cash: "מזומן", debit: "דיירקט", credit: "אשראי" };
   await callTelegram(token, "sendMessage", {
     chat_id: chat.id,
-    text: `נרשם: ${amount} ₪ · ${name} · ${methodNames[method]} · ${date}`,
+    text: `נרשם: ${amount} ₪ · ${name} · ${methodNames[method]} · ${date}${method === 'cash' ? ' · לא יורד מהמשכורת' : ''}`,
     reply_markup: { inline_keyboard: [[{ text: "↩ ביטול", callback_data: `undo:${expense.id}` }]] },
   });
   return reply({ ok: true });

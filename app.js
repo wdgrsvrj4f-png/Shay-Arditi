@@ -356,6 +356,26 @@ function cashBalance(asOf = todayISO) {
   return balance;
 }
 
+function salaryPosition(range) {
+  const tx = cycleTransactions(range);
+  const income = tx.filter(item => item.type === 'income').reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const coveredByPendingBill = new Set(state.creditPayments.filter(item => item.status === 'pending').flatMap(item => item.coveredExpenseIds || []));
+  const spentNow = tx.reduce((sum, item) => {
+    if (item.type === 'cash_withdrawal') return sum + (Number(item.amount) || 0);
+    if (item.type === 'debt_payment' && item.method !== 'cash') return sum + (Number(item.amount) || 0);
+    if (item.type === 'expense' && item.method !== 'cash' && !coveredByPendingBill.has(item.id)) return sum + (Number(item.amount) || 0);
+    return sum;
+  }, 0);
+  const reserved = getPendingCommitments(range)
+    .filter(item => item.kind === 'debt' || item.method !== 'cash')
+    .reduce((sum, item) => sum + commitmentAmount(item), 0);
+  const pendingCredit = state.creditPayments
+    .filter(item => item.status === 'pending')
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const spent = spentNow + reserved + pendingCredit;
+  return { income, spent, left: income - spent };
+}
+
 function render() {
   const range = cycleRange();
   const transactions = cycleTransactions(range);
@@ -365,41 +385,35 @@ function render() {
   const remaining = totalBudget - spent;
   const pending = getPendingCommitments(range);
   const pendingCards = getCardGroups();
-  const bankNow = bankBalance();
-  const cashNow = cashBalance();
-  const bankCommitments = pending.filter(item => item.kind === 'debt' || item.method !== 'cash').reduce((sum, item) => sum + commitmentAmount(item), 0);
-  const cashCommitments = pending.filter(item => item.kind === 'fixed' && item.method === 'cash').reduce((sum, item) => sum + Number(item.amount), 0);
-  const cardCommitments = pendingCards.reduce((sum, item) => sum + Number(item.amount), 0)
-    + state.creditPayments.filter(item => item.status === 'paid' && item.paidDate > todayISO).reduce((sum, item) => sum + Number(item.amount), 0);
-  const bankAfterKnown = bankNow - bankCommitments - cardCommitments;
-  const cashAfterKnown = cashNow - cashCommitments;
-  const resourcesAfterKnown = bankAfterKnown + cashAfterKnown;
-  const freeToSpend = resourcesAfterKnown;
-
+  const position = salaryPosition(range);
   document.querySelector('#cycle-title').textContent = `מחזור ${dateLabel(toISODate(range.start), { day: 'numeric', month: 'long' })}–${dateLabel(toISODate(range.end), { day: 'numeric', month: 'long' })}`;
   const freeEl = document.querySelector('#free-to-spend');
-  freeEl.textContent = money(freeToSpend);
-  freeEl.classList.toggle('is-negative', freeToSpend < 0);
-  document.querySelector('#hero-bank').textContent = money(bankNow);
-  document.querySelector('#hero-cash').textContent = money(cashNow);
+  freeEl.textContent = money(position.left);
+  freeEl.classList.toggle('is-negative', position.left < 0);
+  document.querySelector('#salary-income').textContent = money(position.income);
+  document.querySelector('#salary-spent').textContent = money(position.spent);
+  const note = document.querySelector('#salary-note');
+  note.textContent = position.income > 0
+    ? 'המספר אומר אם נשארת בתוך המשכורת. מזומן שהיה עליך קודם לא מוריד אותו.'
+    : 'עוד אין משכורת במחזור הזה. אחרי שתוסיף אותה, תראה מה נשאר.';
+
   document.querySelector('#cycle-remaining').textContent = money(remaining);
   document.querySelector('#budget-total').textContent = money(totalBudget);
   document.querySelector('#spent-total').textContent = money(spent);
-  document.querySelector('#bank-estimate').textContent = money(bankAfterKnown);
-  document.querySelector('#bank-now').textContent = money(bankNow);
-  document.querySelector('#cash-now').textContent = money(cashNow);
+  document.querySelector('#bank-estimate').textContent = money(bankBalance());
+  document.querySelector('#bank-now').textContent = money(bankBalance());
+  document.querySelector('#cash-now').textContent = money(cashBalance());
   document.querySelector('#next-payday').textContent = dateLabel(toISODate(new Date(range.end.getFullYear(), range.end.getMonth(), Number(state.settings.paydayDay) || 10)), { day: 'numeric', month: 'long' });
   document.querySelector('#credit-settings-caption').textContent = `סגירה ב־${state.settings.creditClosingDay} · חיוב ב־${state.settings.creditPaymentDay}`;
   document.querySelector('#progress').style.width = `${totalBudget > 0 ? Math.max(0, Math.min(100, spent / totalBudget * 100)) : 0}%`;
   document.querySelector('#cycle-remaining').dataset.value = String(remaining);
-  document.querySelector('#bank-estimate').dataset.value = String(bankAfterKnown);
   document.querySelector('#sync-status').classList.toggle('warning', !cloudActive);
 
   renderBudgets(expenses);
   renderCommitments(pending, range);
   renderCards(getCardGroups());
   renderTransactions(transactions);
-  renderSurplus(remaining, resourcesAfterKnown, range);
+  renderSurplus(position.left, position.left, range);
 }
 
 function renderBudgets(expenses) {
@@ -470,12 +484,13 @@ function renderTransactions(transactions) {
   for (const item of rows) {
     const row = document.createElement('article');
     row.className = 'list-row transaction-row';
+    const offSalary = item.type === 'expense' && item.method === 'cash';
     const type = item.type === 'income' ? 'הכנסה' : item.type === 'debt_payment' ? 'החזר חוב' : item.type === 'cash_withdrawal' ? 'משיכת מזומן' : (CATEGORIES[item.category] || 'הוצאה');
     const method = item.type === 'income' ? '' : METHODS[item.method] || '';
-    const sign = item.type === 'income' || item.type === 'cash_withdrawal' ? '+' : '−';
+    const sign = item.type === 'income' ? '+' : offSalary ? '' : '−';
     row.innerHTML = '<div class="row-info"><strong></strong><small></small></div><b></b><button class="delete-button" type="button" aria-label="מחיקת תנועה">×</button>';
     row.querySelector('strong').textContent = item.name;
-    row.querySelector('small').textContent = `${type}${method ? ` · ${method}` : ''} · ${dateLabel(item.date)}`;
+    row.querySelector('small').textContent = `${type}${method ? ` · ${method}` : ''}${offSalary ? ' · לא מהמשכורת' : ''} · ${dateLabel(item.date)}`;
     row.querySelector('b').textContent = `${sign}${money(item.amount)}`;
     row.querySelector('button').addEventListener('click', () => deleteTransaction(item.id));
     holder.append(row);
