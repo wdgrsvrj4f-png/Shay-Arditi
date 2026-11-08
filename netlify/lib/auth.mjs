@@ -5,7 +5,7 @@ const cookieName = 'budget_session';
 const maxAge = 60 * 60 * 24 * 7;
 export function accessKey() {
   const key = process.env.BUDGET_ACCESS_KEY || '';
-  return key.length >= 32 ? key : null;
+  return key.length >= 8 ? key : null;
 }
 export function sameSecret(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
