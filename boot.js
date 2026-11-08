@@ -6,5 +6,5 @@ try {
   ]);
   if (root) root.innerHTML = parts.join('');
 } catch (_) {}
-await import('/app.js?v=protected-sync-v3');
-await import('/fixes.js?v=1');
+await import('/app.js?v=free-to-spend-1');
+await import('/fixes.js?v=2');
