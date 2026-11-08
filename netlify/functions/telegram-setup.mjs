@@ -1,3 +1,4 @@
+import { requireAuth } from '../lib/auth.mjs';
 import { timingSafeEqual } from "node:crypto";
 
 function sameSecret(left, right) {
@@ -15,6 +16,9 @@ function reply(data, status = 200) {
 }
 
 export default async function handler(request) {
+  const denied = requireAuth(request);
+  if (denied) return denied;
+  if (process.env.CONTEXT && !["production", "dev"].includes(process.env.CONTEXT)) return reply({ error: "Telegram setup is disabled in previews" }, 403);
   if (request.method !== "POST") return reply({ error: "Method not allowed" }, 405);
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;

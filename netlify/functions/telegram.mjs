@@ -1,8 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { getStore } from "@netlify/blobs";
-
-const store = getStore("simple-budget");
-const blobKey = "shared-budget";
+import { budgetStore, readSnapshot, writeSnapshot } from '../lib/store.mjs';
+import { validateState } from '../lib/validation.mjs';
+import { readJSON } from '../lib/http.mjs';
 const categories = {
   groceries: "אוכל וקניות",
   fuel: "דלק",
@@ -28,10 +27,7 @@ function sameSecret(left, right) {
 }
 
 function dateISO(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
 function creditDueDate(purchaseDate, settings) {
@@ -45,9 +41,9 @@ function creditDueDate(purchaseDate, settings) {
     close = new Date(purchase.getFullYear(), purchase.getMonth() + 1, Math.min(closingDay, nextLength), 12);
   }
   const payment = new Date(close.getFullYear(), close.getMonth(), Math.min(paymentDay, new Date(close.getFullYear(), close.getMonth() + 1, 0).getDate()), 12);
-  if (payment > close) return dateISO(payment);
+  if (payment > close) return payment.toLocaleDateString('en-CA');
   const nextLength = new Date(close.getFullYear(), close.getMonth() + 2, 0).getDate();
-  return dateISO(new Date(close.getFullYear(), close.getMonth() + 1, Math.min(paymentDay, nextLength), 12));
+  return new Date(close.getFullYear(), close.getMonth() + 1, Math.min(paymentDay, nextLength), 12).toLocaleDateString('en-CA');
 }
 
 function blankState() {
@@ -98,42 +94,6 @@ function normalizeState(value) {
     }
   }
   return state;
-}
-
-function mergeList(current, incoming) {
-  const items = new Map();
-  for (const item of [...(current || []), ...(incoming || [])]) items.set(item.id, item);
-  return [...items.values()];
-}
-
-function mergeStates(current, incoming) {
-  if (!current || current.version !== 2) return incoming;
-  const merged = {
-    ...current,
-    ...incoming,
-    obligations: mergeList(current.obligations, incoming.obligations),
-    debts: mergeList(current.debts, incoming.debts),
-    transactions: mergeList(current.transactions, incoming.transactions),
-    deletedObligationIds: [...new Set([...(current.deletedObligationIds || []), ...(incoming.deletedObligationIds || [])])].slice(-5_000),
-    deletedDebtIds: [...new Set([...(current.deletedDebtIds || []), ...(incoming.deletedDebtIds || [])])].slice(-5_000),
-    deletedTransactionIds: [...new Set([...(current.deletedTransactionIds || []), ...(incoming.deletedTransactionIds || [])])].slice(-5_000),
-    creditPayments: mergeList(current.creditPayments, incoming.creditPayments),
-    surplusActions: mergeList(current.surplusActions, incoming.surplusActions),
-    processedTelegramUpdates: [...new Set([...(current.processedTelegramUpdates || []), ...(incoming.processedTelegramUpdates || [])])].slice(-500),
-    telegramChatId: current.telegramChatId || incoming.telegramChatId || null,
-  };
-  const deletedTransactions = new Set(merged.deletedTransactionIds);
-  const deletedObligations = new Set(merged.deletedObligationIds);
-  const deletedDebts = new Set(merged.deletedDebtIds);
-  merged.transactions = merged.transactions.filter(item => !deletedTransactions.has(item.id));
-  merged.obligations = merged.obligations.filter(item => !deletedObligations.has(item.id));
-  merged.debts = merged.debts.filter(item => !deletedDebts.has(item.id));
-  return merged;
-}
-
-async function saveMergedState(state) {
-  const latest = normalizeState(await store.get(blobKey, { type: "json" }));
-  await store.setJSON(blobKey, mergeStates(latest, state));
 }
 
 function parseAmount(text) {
@@ -193,7 +153,8 @@ function rememberUpdate(state, updateId) {
   state.processedTelegramUpdates = [...(state.processedTelegramUpdates || []), updateId].slice(-500);
 }
 
-export default async function handler(request) {
+export function createTelegramHandler(getStore = budgetStore, callTelegram = telegramCall) {
+return async function handler(request) {
   if (request.method !== "POST") return reply({ error: "Method not allowed" }, 405);
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -202,14 +163,26 @@ export default async function handler(request) {
   if (!sameSecret(request.headers.get("x-telegram-bot-api-secret-token"), webhookSecret)) return reply({ error: "Unauthorized" }, 401);
 
   let update;
-  try { update = await request.json(); }
+  try { update = await readJSON(request, 64_000); }
   catch { return reply({ error: "Invalid update" }, 400); }
   const updateId = Number(update?.update_id);
   const message = update?.message || update?.callback_query?.message;
   const chat = message?.chat;
   if (!Number.isSafeInteger(updateId) || !chat?.id || chat.type !== "private") return reply({ ok: true });
 
-  const state = normalizeState(await store.get(blobKey, { type: "json" }));
+  const store = await getStore();
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const snapshot = await readSnapshot(store);
+    const state = normalizeState(snapshot.data);
+    async function saveMergedState(value) {
+      if (!validateState(value) || new TextEncoder().encode(JSON.stringify(value)).byteLength > 256_000) {
+        throw new Error('Invalid or oversized budget');
+      }
+      if (!await writeSnapshot(store, value, snapshot.revision)) throw Object.assign(new Error('Conflict'), { conflict: true });
+    }
+    try { return await processUpdate(); }
+    catch (error) { if (!error.conflict) throw error; }
+    async function processUpdate() {
   if (state.processedTelegramUpdates.includes(updateId)) return reply({ ok: true, duplicate: true });
   const chatId = String(chat.id);
   const text = String(update?.message?.text || "").trim();
@@ -220,12 +193,12 @@ export default async function handler(request) {
       state.telegramChatId = chatId;
       rememberUpdate(state, updateId);
       await saveMergedState(state);
-      await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "הבוט חובר לחשבון התקציב שלך. אפשר לכתוב הוצאה בעברית." });
+      await callTelegram(token, "sendMessage", { chat_id: chat.id, text: "הבוט חובר לחשבון התקציב שלך. אפשר לכתוב הוצאה בעברית." });
       return reply({ ok: true, paired: true });
     }
     rememberUpdate(state, updateId);
     await saveMergedState(state);
-    await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "כדי לחבר את הבוט, שלח /pair ואחריו קוד החיבור שהגדרת ב-Netlify." });
+    await callTelegram(token, "sendMessage", { chat_id: chat.id, text: "כדי לחבר את הבוט, שלח /pair ואחריו קוד החיבור שהגדרת ב-Netlify." });
     return reply({ ok: true });
   }
 
@@ -240,12 +213,12 @@ export default async function handler(request) {
       state.deletedTransactionIds = [...new Set([...(state.deletedTransactionIds || []), expenseId])].slice(-5_000);
       rememberUpdate(state, updateId);
       await saveMergedState(state);
-      await telegramCall(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "ההוצאה בוטלה" });
-      await telegramCall(token, "editMessageText", { chat_id: chat.id, message_id: message.message_id, text: "ההוצאה בוטלה." });
+      await callTelegram(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "ההוצאה בוטלה" });
+      await callTelegram(token, "editMessageText", { chat_id: chat.id, message_id: message.message_id, text: "ההוצאה בוטלה." });
     } else {
       rememberUpdate(state, updateId);
       await saveMergedState(state);
-      await telegramCall(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "לא מצאתי את ההוצאה" });
+      await callTelegram(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "לא מצאתי את ההוצאה" });
     }
     return reply({ ok: true });
   }
@@ -255,12 +228,12 @@ export default async function handler(request) {
       state.pendingTelegramExpense = null;
       rememberUpdate(state, updateId);
       await saveMergedState(state);
-      await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "הכניסה בוטלה. לא נרשמה הוצאה." });
+      await callTelegram(token, "sendMessage", { chat_id: chat.id, text: "הכניסה בוטלה. לא נרשמה הוצאה." });
       return reply({ ok: true, cancelled: true });
     }
     rememberUpdate(state, updateId);
     await saveMergedState(state);
-    await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "כתבו הוצאה במילים חופשיות, למשל: קפה 42 באשראי. אם חסר פרט, אפשר לשלוח אותו בהודעה הבאה. לביטול כתבו /cancel." });
+    await callTelegram(token, "sendMessage", { chat_id: chat.id, text: "כתבו הוצאה במילים חופשיות, למשל: קפה 42 באשראי. אם חסר פרט, אפשר לשלוח אותו בהודעה הבאה. לביטול כתבו /cancel." });
     return reply({ ok: true });
   }
 
@@ -272,7 +245,7 @@ export default async function handler(request) {
     rememberUpdate(state, updateId);
     await saveMergedState(state);
     const missing = !amount && !method ? "סכום ואמצעי תשלום" : !amount ? "סכום" : "אמצעי תשלום: מזומן, דיירקט או אשראי";
-    await telegramCall(token, "sendMessage", { chat_id: chat.id, text: `לא רשמתי עדיין. חסר ${missing}. אפשר לשלוח עכשיו רק את הפרט שחסר, למשל: 42 או באשראי. לביטול כתבו /cancel.` });
+    await callTelegram(token, "sendMessage", { chat_id: chat.id, text: `לא רשמתי עדיין. חסר ${missing}. אפשר לשלוח עכשיו רק את הפרט שחסר, למשל: 42 או באשראי. לביטול כתבו /cancel.` });
     return reply({ ok: true, needsDetails: true });
   }
 
@@ -280,7 +253,7 @@ export default async function handler(request) {
   const category = parseCategory(combinedText);
   const name = expenseName(combinedText) || categories[category];
   const expense = {
-    id: crypto.randomUUID(),
+    id: `telegram-${updateId}`,
     type: "expense",
     name,
     amount,
@@ -296,10 +269,15 @@ export default async function handler(request) {
   await saveMergedState(state);
 
   const methodNames = { cash: "מזומן", debit: "דיירקט", credit: "אשראי" };
-  await telegramCall(token, "sendMessage", {
+  await callTelegram(token, "sendMessage", {
     chat_id: chat.id,
     text: `נרשם: ${amount} ₪ · ${name} · ${methodNames[method]} · ${date}`,
     reply_markup: { inline_keyboard: [[{ text: "↩ ביטול", callback_data: `undo:${expense.id}` }]] },
   });
   return reply({ ok: true });
+    }
+  }
+  return reply({ error: "Budget is busy; retry update" }, 503);
+};
 }
+export default createTelegramHandler();
