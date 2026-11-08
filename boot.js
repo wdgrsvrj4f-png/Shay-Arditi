@@ -6,5 +6,5 @@ try {
   ]);
   if (root) root.innerHTML = parts.join('');
 } catch (_) {}
-await import('/app.js?v=score-fixes');
+await import('/app.js?v=status-quiet');
 await import('/fixes.js?v=2');

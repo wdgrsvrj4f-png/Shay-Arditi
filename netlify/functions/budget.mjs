@@ -14,6 +14,9 @@ export function publicState(data) {
   const { telegramChatId, processedTelegramUpdates, pendingTelegramExpense, ...budget } = data;
   return budget;
 }
+function replyState(data, revision) {
+  return reply({ ...publicState(data), _rev: revision }, 200, { ETag: revision, 'X-Budget-Revision': revision });
+}
 export function createBudgetHandler(getStore = budgetStore) {
   return async function handler(request) {
     const denied = requireAuth(request);
@@ -23,7 +26,7 @@ export function createBudgetHandler(getStore = budgetStore) {
       const store = await getStore();
       if (request.method === 'GET') {
         const { data, revision } = await readSnapshot(store);
-        return reply(publicState(data), 200, { ETag: revision, 'X-Budget-Revision': revision });
+        return replyState(data, revision);
       }
       const revision = canonicalRevision(request.headers.get('x-budget-revision') || request.headers.get('if-match'));
       if (!revision) return reply({ error: 'Reload the updated app before saving' }, 428);
@@ -32,6 +35,7 @@ export function createBudgetHandler(getStore = budgetStore) {
       // Telegram routing and deduplication are server-owned, never client writable.
       delete payload.telegramChatId;
       delete payload.pendingTelegramExpense;
+      delete payload._rev;
       payload.processedTelegramUpdates = [];
       const clean = validateState(payload);
       if (!clean) return reply({ error: 'Invalid budget data' }, 400);
@@ -44,7 +48,7 @@ export function createBudgetHandler(getStore = budgetStore) {
       // Read back the current snapshot: a concurrent Telegram update may already
       // have committed, and clients must acknowledge that exact revision too.
       const saved = await readSnapshot(store);
-      return reply(publicState(saved.data), 200, { ETag: saved.revision, 'X-Budget-Revision': saved.revision });
+      return replyState(saved.data, saved.revision);
     } catch (error) {
       return reply({ error: error.status ? error.message : 'Storage unavailable' }, error.status || 503);
     }

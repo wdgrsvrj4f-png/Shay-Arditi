@@ -162,7 +162,11 @@ function saveLocal() {
 function needsCloudSync() {
   try { return localStorage.getItem(PENDING_SYNC_KEY) === '1'; } catch { return false; }
 }
-function setStatus(message) { document.querySelector('#sync-status').textContent = message; }
+function setStatus(message) {
+  const el = document.querySelector('#sync-status');
+  el.textContent = message || '';
+  el.hidden = !message;
+}
 function saveState() {
   dirty = true;
   saveLocal();
@@ -191,15 +195,16 @@ async function refreshCloud() {
       syncAgain = false;
       const response = await apiFetch(API);
       if (!response.ok) throw new Error('הענן לא זמין כרגע');
-      const revision = response.headers.get('x-budget-revision') || response.headers.get('etag');
-      if (!revision) throw new Error('גרסת השרת אינה תואמת. יש לרענן אחרי העדכון.');
       const raw = await response.json();
+      const revision = response.headers.get('x-budget-revision') || response.headers.get('etag') || raw?._rev || '';
+      if (raw && typeof raw === 'object') delete raw._rev;
+      if (!revision) throw new Error('גרסת השרת אינה תואמת. יש לרענן אחרי העדכון.');
       const remote = normalizeState(raw);
       cloudActive = true;
       if (!baseState && !dirty && hasData(state) && raw?.version !== 2 && !hasData(remote)) dirty = true;
       if (!dirty) {
         state = remote; baseState = structuredClone(remote); saveLocal(); render();
-        setStatus('מסונכרן');
+        setStatus('');
         return;
       }
       // Different devices keep their own new entries. The same detail keeps whichever save landed last.
@@ -208,26 +213,28 @@ async function refreshCloud() {
         : migrateLegacyPending(state, remote);
       state = normalizeState(merged.state);
       baseState = structuredClone(remote);
-      if (JSON.stringify(state) === JSON.stringify(remote)) { dirty = false; saveLocal(); render(); setStatus('מסונכרן'); return; }
+      if (JSON.stringify(state) === JSON.stringify(remote)) { dirty = false; saveLocal(); render(); setStatus(''); return; }
       saveLocal(); render();
       const submitted = structuredClone(state);
-      setStatus('מסנכרן…');
+      setStatus('שומר…');
       const saved = await apiFetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Budget-Revision': revision }, body: JSON.stringify(submitted) });
       if (saved.status === 409) continue;
       if (!saved.ok) throw new Error(saved.status === 413 ? 'התקציב גדול מדי לשמירה. הנתונים נשארו במכשיר.' : 'השמירה לענן לא עברה, מנסה שוב');
-      const acknowledged = normalizeState(await saved.json());
+      const savedBody = await saved.json();
+      if (savedBody && typeof savedBody === 'object') delete savedBody._rev;
+      const acknowledged = normalizeState(savedBody);
       const next = mergeChanges(submitted, state, acknowledged, { preferLocal: true });
       baseState = structuredClone(acknowledged);
       state = normalizeState(next.state);
       dirty = JSON.stringify(state) !== JSON.stringify(acknowledged);
       saveLocal(); render();
-      if (!dirty && !syncAgain) { setStatus('מסונכרן'); return; }
+      if (!dirty && !syncAgain) { setStatus(''); return; }
     }
     retryDelay = 2000;
-    setStatus('מסנכרן…');
+    setStatus('שומר…');
   } catch (error) {
     cloudActive = false;
-    setStatus(error.message === 'נדרשת כניסה מחדש' ? error.message : 'מסנכרן…');
+    setStatus(error.message === 'נדרשת כניסה מחדש' ? error.message : 'לא נשמר. מנסה שוב.');
     if (error.message !== 'נדרשת כניסה מחדש') retryDelay = 3000;
   } finally {
     syncBusy = false;
