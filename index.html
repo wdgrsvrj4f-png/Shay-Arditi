@@ -15,6 +15,27 @@
 .list-row .edit-tx,.list-row .edit-template{margin-inline-start:auto}
 .balance-card strong.is-negative{color:var(--red)}
 .section-sub{font-size:11px;color:var(--muted);margin:0 0 8px}
+    .salary-bar{height:3px;background:#2a2e38;border-radius:4px;margin:26px 0 0;overflow:hidden}
+    .salary-bar i{display:block;height:100%;width:0;background:#d7dde8}
+    .mark{display:none}
+    .brand h1{font-size:13px;font-weight:500;letter-spacing:.08em;color:#9aa0ab}
+    .today{color:#6e7480;font-size:12px}
+    .top{align-items:flex-start}
+    .icon-button,.outline-button,.small-button{background:transparent;border-color:#343844;color:#d5d8df;border-radius:12px}
+    .hero{border:0;background:none;box-shadow:none;padding:36px 0 0}
+    .cycle{color:#6e7480}
+    .label{color:#9aa0ab;font-size:14px}
+    .amount{font-size:64px;font-weight:700;letter-spacing:-2px;line-height:1;margin:8px 0 10px}
+    .sub{color:#b7bcc6;font-size:14px;line-height:1.6}
+    .hero-note{color:#8b919c}
+    .primary{background:#f2f3f5;color:#12141a}
+    .section{border:0;background:transparent;padding:6px 0 0;margin-top:28px}
+    .section h2{font-size:12px;font-weight:500;color:#8b919c}
+    .list-row{border:0;border-top:1px solid #262a33;border-radius:0;background:transparent;padding:12px 0}
+    .empty{border:0;background:transparent;text-align:right;padding:8px 0}
+    .wrap{width:min(100% - 44px,480px)}
+    @media(min-width:900px){.wrap{width:min(100% - 48px,480px);display:block;margin:28px auto 64px}.section{margin-top:28px}}
+    @media(max-width:560px){.amount{font-size:56px}}
     </style>
   </head>
   <body>
@@ -35,7 +56,8 @@
         <div class="hero-main">
           <div class="label">נשאר מהמשכורת</div>
           <div class="amount" id="free-to-spend">₪0</div>
-          <div class="sub">משכורת <b id="salary-income">₪0</b> · יצא <b id="salary-spent">₪0</b> · עד <span id="next-payday"></span></div>
+          <div class="sub">משכורת <b id="salary-income">₪0</b><br>יצא <b id="salary-spent">₪0</b> · עד <span id="next-payday"></span></div>
+          <div class="salary-bar" aria-hidden="true"><i id="salary-bar"></i></div>
           <p class="hero-note" id="salary-note">המספר אומר אם נשארת בתוך המשכורת. מזומן שהיה עליך קודם לא מוריד אותו.</p>
         </div>
         <div class="category-line" hidden>
@@ -52,12 +74,12 @@
       <section class="section"><div class="section-head"><h2>חיובים ששולמו</h2></div><p class="section-sub">סימון ששולם לא מוריד שוב מהמשכורת. הקנייה כבר נספרה.</p><div class="list" id="paid-credit-bills"></div></section>
       <section class="section"><div class="section-head"><h2>תנועות במחזור</h2><span class="section-note">מזומן מהכיס לא נספר</span></div><div class="list" id="transactions"></div></section>
       <section class="section surplus" hidden><div><div class="label">עודף משוער לחלוקה</div><strong id="surplus-amount">₪0</strong><p id="surplus-note"></p><p id="surplus-history"></p></div><button class="outline-button" id="allocate-surplus" type="button" disabled>לאן להעביר?</button></section>
-      <div class="sync-footer"><p class="notice" id="sync-status" role="status">מתחבר…</p><p class="notice"><a href="/looks.html">5 עיצובים</a></p></div>
+      <div class="sync-footer"><p class="notice" id="sync-status" role="status">מתחבר…</p></div>
     </main>
     <dialog id="expense-dialog"><form class="form" id="expense-form"><div class="formhead"><h2>הוצאה חדשה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label>על מה הוצאת?</label><input name="name" maxlength="80" placeholder="למשל: קניות בסופר" required /></div><div class="form-grid"><div class="field"><label>סכום</label><input name="amount" type="number" min="0.01" step="0.01" placeholder="0" required /></div><div class="field"><label>תאריך הקנייה</label><input name="date" type="date" required /></div></div><div class="form-grid"><div class="field"><label>קטגוריה</label><select name="category"><option value="groceries">אוכל וקניות</option><option value="fuel">דלק</option><option value="transport">תחבורה</option><option value="home">בית וחשבונות</option><option value="health">בריאות</option><option value="leisure">בילויים ואישי</option><option value="other">אחר</option></select></div><div class="field"><label>איך שילמת?</label><select name="method"><option value="debit">דיירקט · יורד מיד</option><option value="credit">אשראי · חיוב בהמשך</option><option value="cash">מזומן</option></select></div></div><p class="hint">דיירקט ואשראי יורדים מהמשכורת. מזומן מהכיס לא.</p><button class="save" type="submit">שמירת ההוצאה</button></form></dialog>
     <dialog id="income-dialog"><form class="form" id="income-form"><div class="formhead"><h2>משכורת או הכנסה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label>תיאור</label><input name="name" value="משכורת" maxlength="80" /></div><div class="form-grid"><div class="field"><label>סכום שנכנס</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>תאריך כניסה</label><input name="date" type="date" required /></div></div><button class="save" type="submit">רישום ההכנסה</button></form></dialog>
     <dialog id="cash-withdrawal-dialog"><form class="form" id="cash-withdrawal-form"><div class="formhead"><h2>משיכת מזומן</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><p class="hint">המשיכה תעביר כסף מהבנק לארנק, ולא תיספר כהוצאה.</p><div class="form-grid"><div class="field"><label>סכום</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>תאריך</label><input name="date" type="date" required /></div></div><button class="save" type="submit">רישום המשיכה</button></form></dialog>
     <div id="extra-dialogs"></div>
-    <script type="module" src="/boot.js?v=7"></script>
+    <script type="module" src="/boot.js?v=8"></script>
   </body>
 </html>

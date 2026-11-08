@@ -421,7 +421,9 @@ function render() {
   document.querySelector('#cash-now').textContent = money(cashBalance());
   document.querySelector('#next-payday').textContent = dateLabel(toISODate(new Date(range.end.getFullYear(), range.end.getMonth(), Number(state.settings.paydayDay) || 10)), { day: 'numeric', month: 'long' });
   document.querySelector('#credit-settings-caption').textContent = `סגירה ב־${state.settings.creditClosingDay} · חיוב ב־${state.settings.creditPaymentDay}`;
-  document.querySelector('#progress').style.width = `${totalBudget > 0 ? Math.max(0, Math.min(100, spent / totalBudget * 100)) : 0}%`;
+  const bar = document.querySelector('#salary-bar');
+  const ratio = position.income > 0 ? Math.max(0, Math.min(1, position.left / position.income)) : 0;
+  if (bar) bar.style.width = `${ratio * 100}%`;
   document.querySelector('#cycle-remaining').dataset.value = String(remaining);
   document.querySelector('#sync-status').classList.toggle('warning', !cloudActive);
 
