@@ -6,4 +6,4 @@ try {
   ]);
   if (root) root.innerHTML = parts.join('');
 } catch (_) {}
-await import('/app.js?v=protected-sync-v3');
+await import('/app.js?v=ux-fix-v1');
