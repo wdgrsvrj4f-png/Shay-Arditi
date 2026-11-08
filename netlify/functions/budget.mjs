@@ -37,6 +37,37 @@ function validAmount(value, allowZero = false) {
   return Number.isFinite(amount) && amount >= (allowZero ? 0 : 0.01) && amount <= 1_000_000;
 }
 
+function mergeList(current, incoming) {
+  const items = new Map();
+  for (const item of [...(current || []), ...(incoming || [])]) items.set(item.id, item);
+  return [...items.values()];
+}
+
+function mergeStates(current, incoming) {
+  if (!current || current.version !== 2) return incoming;
+  const merged = {
+    ...current,
+    ...incoming,
+    obligations: mergeList(current.obligations, incoming.obligations),
+    debts: mergeList(current.debts, incoming.debts),
+    transactions: mergeList(current.transactions, incoming.transactions),
+    deletedObligationIds: [...new Set([...(current.deletedObligationIds || []), ...(incoming.deletedObligationIds || [])])].slice(-5_000),
+    deletedDebtIds: [...new Set([...(current.deletedDebtIds || []), ...(incoming.deletedDebtIds || [])])].slice(-5_000),
+    deletedTransactionIds: [...new Set([...(current.deletedTransactionIds || []), ...(incoming.deletedTransactionIds || [])])].slice(-5_000),
+    creditPayments: mergeList(current.creditPayments, incoming.creditPayments),
+    surplusActions: mergeList(current.surplusActions, incoming.surplusActions),
+    processedTelegramUpdates: [...new Set([...(current.processedTelegramUpdates || []), ...(incoming.processedTelegramUpdates || [])])].slice(-500),
+    telegramChatId: incoming.telegramChatId || current.telegramChatId || null,
+  };
+  const deletedTransactions = new Set(merged.deletedTransactionIds);
+  const deletedObligations = new Set(merged.deletedObligationIds);
+  const deletedDebts = new Set(merged.deletedDebtIds);
+  merged.transactions = merged.transactions.filter(item => !deletedTransactions.has(item.id));
+  merged.obligations = merged.obligations.filter(item => !deletedObligations.has(item.id));
+  merged.debts = merged.debts.filter(item => !deletedDebts.has(item.id));
+  return merged;
+}
+
 function validateState(value) {
   if (!value || typeof value !== "object" || value.version !== 2 || !value.settings || typeof value.settings !== "object") return null;
   const { settings } = value;
@@ -51,6 +82,9 @@ function validateState(value) {
     if (!validAmount(settings.budgets[category] ?? 0, true)) return null;
   }
 
+  for (const key of ["deletedObligationIds", "deletedDebtIds", "deletedTransactionIds"]) {
+    if (value[key] === undefined) value[key] = [];
+  }
   const arrays = ["obligations", "debts", "deletedObligationIds", "deletedDebtIds", "transactions", "deletedTransactionIds", "creditPayments", "surplusActions", "processedTelegramUpdates"];
   for (const key of arrays) {
     if (!Array.isArray(value[key]) || value[key].length > (key === "processedTelegramUpdates" ? 500 : 5_000)) return null;
@@ -116,6 +150,7 @@ export default async function handler(request) {
   const clean = validateState(payload);
   if (!clean) return reply({ error: "Invalid budget data" }, 400);
 
-  await store.setJSON(blobKey, clean);
+  const current = await store.get(blobKey, { type: "json" });
+  await store.setJSON(blobKey, mergeStates(current, clean));
   return reply({ saved: true });
 }

@@ -100,6 +100,42 @@ function normalizeState(value) {
   return state;
 }
 
+function mergeList(current, incoming) {
+  const items = new Map();
+  for (const item of [...(current || []), ...(incoming || [])]) items.set(item.id, item);
+  return [...items.values()];
+}
+
+function mergeStates(current, incoming) {
+  if (!current || current.version !== 2) return incoming;
+  const merged = {
+    ...current,
+    ...incoming,
+    obligations: mergeList(current.obligations, incoming.obligations),
+    debts: mergeList(current.debts, incoming.debts),
+    transactions: mergeList(current.transactions, incoming.transactions),
+    deletedObligationIds: [...new Set([...(current.deletedObligationIds || []), ...(incoming.deletedObligationIds || [])])].slice(-5_000),
+    deletedDebtIds: [...new Set([...(current.deletedDebtIds || []), ...(incoming.deletedDebtIds || [])])].slice(-5_000),
+    deletedTransactionIds: [...new Set([...(current.deletedTransactionIds || []), ...(incoming.deletedTransactionIds || [])])].slice(-5_000),
+    creditPayments: mergeList(current.creditPayments, incoming.creditPayments),
+    surplusActions: mergeList(current.surplusActions, incoming.surplusActions),
+    processedTelegramUpdates: [...new Set([...(current.processedTelegramUpdates || []), ...(incoming.processedTelegramUpdates || [])])].slice(-500),
+    telegramChatId: current.telegramChatId || incoming.telegramChatId || null,
+  };
+  const deletedTransactions = new Set(merged.deletedTransactionIds);
+  const deletedObligations = new Set(merged.deletedObligationIds);
+  const deletedDebts = new Set(merged.deletedDebtIds);
+  merged.transactions = merged.transactions.filter(item => !deletedTransactions.has(item.id));
+  merged.obligations = merged.obligations.filter(item => !deletedObligations.has(item.id));
+  merged.debts = merged.debts.filter(item => !deletedDebts.has(item.id));
+  return merged;
+}
+
+async function saveMergedState(state) {
+  const latest = normalizeState(await store.get(blobKey, { type: "json" }));
+  await store.setJSON(blobKey, mergeStates(latest, state));
+}
+
 function parseAmount(text) {
   const match = text.match(/(?<!\d)(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?!\d)/);
   if (!match) return null;
@@ -183,12 +219,12 @@ export default async function handler(request) {
     if (command === "/pair" && sameSecret(suppliedCode, pairingCode)) {
       state.telegramChatId = chatId;
       rememberUpdate(state, updateId);
-      await store.setJSON(blobKey, state);
+      await saveMergedState(state);
       await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "הבוט חובר לחשבון התקציב שלך. אפשר לכתוב הוצאה בעברית." });
       return reply({ ok: true, paired: true });
     }
     rememberUpdate(state, updateId);
-    await store.setJSON(blobKey, state);
+    await saveMergedState(state);
     await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "כדי לחבר את הבוט, שלח /pair ואחריו קוד החיבור שהגדרת ב-Netlify." });
     return reply({ ok: true });
   }
@@ -203,12 +239,12 @@ export default async function handler(request) {
       state.transactions = state.transactions.filter(item => item.id !== expenseId);
       state.deletedTransactionIds = [...new Set([...(state.deletedTransactionIds || []), expenseId])].slice(-5_000);
       rememberUpdate(state, updateId);
-      await store.setJSON(blobKey, state);
+      await saveMergedState(state);
       await telegramCall(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "ההוצאה בוטלה" });
       await telegramCall(token, "editMessageText", { chat_id: chat.id, message_id: message.message_id, text: "ההוצאה בוטלה." });
     } else {
       rememberUpdate(state, updateId);
-      await store.setJSON(blobKey, state);
+      await saveMergedState(state);
       await telegramCall(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "לא מצאתי את ההוצאה" });
     }
     return reply({ ok: true });
@@ -218,12 +254,12 @@ export default async function handler(request) {
     if (text === "/cancel" && state.pendingTelegramExpense) {
       state.pendingTelegramExpense = null;
       rememberUpdate(state, updateId);
-      await store.setJSON(blobKey, state);
+      await saveMergedState(state);
       await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "הכניסה בוטלה. לא נרשמה הוצאה." });
       return reply({ ok: true, cancelled: true });
     }
     rememberUpdate(state, updateId);
-    await store.setJSON(blobKey, state);
+    await saveMergedState(state);
     await telegramCall(token, "sendMessage", { chat_id: chat.id, text: "כתבו הוצאה במילים חופשיות, למשל: קפה 42 באשראי. אם חסר פרט, אפשר לשלוח אותו בהודעה הבאה. לביטול כתבו /cancel." });
     return reply({ ok: true });
   }
@@ -234,7 +270,7 @@ export default async function handler(request) {
   if (!amount || !method) {
     state.pendingTelegramExpense = { text: combinedText };
     rememberUpdate(state, updateId);
-    await store.setJSON(blobKey, state);
+    await saveMergedState(state);
     const missing = !amount && !method ? "סכום ואמצעי תשלום" : !amount ? "סכום" : "אמצעי תשלום: מזומן, דיירקט או אשראי";
     await telegramCall(token, "sendMessage", { chat_id: chat.id, text: `לא רשמתי עדיין. חסר ${missing}. אפשר לשלוח עכשיו רק את הפרט שחסר, למשל: 42 או באשראי. לביטול כתבו /cancel.` });
     return reply({ ok: true, needsDetails: true });
@@ -257,7 +293,7 @@ export default async function handler(request) {
   state.transactions.push(expense);
   state.pendingTelegramExpense = null;
   rememberUpdate(state, updateId);
-  await store.setJSON(blobKey, state);
+  await saveMergedState(state);
 
   const methodNames = { cash: "מזומן", debit: "דיירקט", credit: "אשראי" };
   await telegramCall(token, "sendMessage", {

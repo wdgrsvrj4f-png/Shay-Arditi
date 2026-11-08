@@ -1,5 +1,6 @@
 const API = '/api/budget';
 const STORAGE_KEY = 'simple-budget-v2';
+const PENDING_SYNC_KEY = 'simple-budget-pending-sync-v1';
 const CATEGORIES = {
   groceries: 'אוכל וקניות',
   fuel: 'דלק',
@@ -104,7 +105,8 @@ function normalizeState(value) {
 
 function hasData(state) {
   return state.transactions.length || state.obligations.length || state.debts.length || state.creditPayments.length
-    || state.surplusActions.length || Number(state.settings?.openingBankBalance) !== 0
+    || state.surplusActions.length || state.deletedTransactionIds.length || state.deletedObligationIds.length || state.deletedDebtIds.length
+    || Number(state.settings?.openingBankBalance) !== 0
     || Boolean(state.telegramChatId)
     || Number(state.settings?.openingCashBalance) !== 0
     || state.settings?.openingDate !== todayISO
@@ -147,6 +149,9 @@ function mergeStates(remote, local) {
 
 let state = normalizeState(readLocal());
 let cloudActive = false;
+let cloudSaveQueue = Promise.resolve();
+let cloudRefreshInProgress = false;
+let saveRevision = 0;
 const startupButtons = ['#add-expense', '#add-income', '#add-cash', '#manage-button', '#manage-button-secondary', '#settings-button', '#add-credit-bill', '#telegram-button'];
 startupButtons.forEach(selector => { document.querySelector(selector).disabled = true; });
 
@@ -159,29 +164,67 @@ function saveLocal() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
 }
 
+function needsCloudSync() {
+  try { return localStorage.getItem(PENDING_SYNC_KEY) === '1'; } catch { return false; }
+}
+
+function markCloudSyncPending(pending) {
+  try {
+    if (pending) localStorage.setItem(PENDING_SYNC_KEY, '1');
+    else localStorage.removeItem(PENDING_SYNC_KEY);
+  } catch {}
+}
+
 function setStatus(message) {
   document.querySelector('#sync-status').textContent = message;
 }
 
-async function saveState() {
+function saveState() {
   saveLocal();
   if (!cloudActive) {
+    markCloudSyncPending(true);
     setStatus('השינוי נשמר במכשיר הזה; הענן עדיין לא מחובר');
-    return;
+    return Promise.resolve();
   }
-  setStatus('מסנכרן לענן…');
+  markCloudSyncPending(true);
+  const revision = ++saveRevision;
+  cloudSaveQueue = cloudSaveQueue.catch(() => {}).then(async () => {
+    setStatus('מסנכרן לענן…');
+    try {
+      const latestResponse = await fetch(API, { cache: 'no-store' });
+      if (latestResponse.ok) state = mergeStates(normalizeState(await latestResponse.json()), state);
+      saveLocal();
+      const response = await fetch(API, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+      if (!response.ok) throw new Error('sync failed');
+      if (revision === saveRevision) markCloudSyncPending(false);
+      setStatus('מסונכרן לענן');
+    } catch {
+      setStatus('הסנכרון נכשל; השינוי נשמר במכשיר הזה');
+    }
+  });
+  return cloudSaveQueue;
+}
+
+async function refreshCloud() {
+  if (!cloudActive || cloudRefreshInProgress) return;
+  cloudRefreshInProgress = true;
   try {
-    const latestResponse = await fetch(API, { cache: 'no-store' });
-    if (latestResponse.ok) state = mergeStates(normalizeState(await latestResponse.json()), state);
-    const response = await fetch(API, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state),
-    });
-    if (!response.ok) throw new Error('sync failed');
+    await cloudSaveQueue;
+    const response = await fetch(API, { cache: 'no-store' });
+    if (!response.ok) throw new Error('cloud unavailable');
+    state = mergeStates(normalizeState(await response.json()), state);
+    saveLocal();
+    render();
     setStatus('מסונכרן לענן');
+    if (needsCloudSync()) await saveState();
   } catch {
-    setStatus('הסנכרון נכשל; השינוי נשמר במכשיר הזה');
+    setStatus('הענן לא זמין כרגע; נשמר המידע האחרון מהמכשיר הזה');
+  } finally {
+    cloudRefreshInProgress = false;
   }
 }
 
@@ -189,16 +232,15 @@ async function connectCloud() {
   try {
     const response = await fetch(API, { cache: 'no-store' });
     if (!response.ok) throw new Error('cloud unavailable');
-    const remote = normalizeState(await response.json());
+    const remoteData = await response.json();
+    const remote = normalizeState(remoteData);
     const local = state;
-    if (hasData(remote) && hasData(local)) state = mergeStates(remote, local);
-    else if (hasData(remote)) state = remote;
-    else if (hasData(local)) state = local;
-    else state = remote;
+    const cloudHasSnapshot = remoteData?.version === 2 || hasData(remote);
+    state = cloudHasSnapshot && !needsCloudSync() ? remote : mergeStates(remote, local);
     cloudActive = true;
     saveLocal();
     render();
-    if (hasData(local) && !hasData(remote)) await saveState();
+    if (needsCloudSync() || (hasData(local) && !cloudHasSnapshot)) await saveState();
     else setStatus('מסונכרן לענן · האתר והנתונים פתוחים למי שיש לו את הקישור');
   } catch {
     cloudActive = false;
@@ -207,6 +249,11 @@ async function connectCloud() {
     startupButtons.forEach(selector => { document.querySelector(selector).disabled = false; });
   }
 }
+
+window.addEventListener('focus', refreshCloud);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void refreshCloud();
+});
 
 function cycleRange(date = today) {
   const day = Number(state.settings.paydayDay) || 10;
