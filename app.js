@@ -133,7 +133,12 @@ let cloudActive = false;
 let unlocked = false;
 let syncBusy = false;
 let syncAgain = false;
+let retryTimer = 0;
 let conflictSnapshot = null;
+function scheduleRetry(delay) {
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => { retryTimer = 0; void refreshCloud(); }, delay);
+}
 const startupButtons = ['#add-expense', '#add-income', '#add-cash', '#manage-button', '#manage-button-secondary', '#settings-button', '#add-credit-bill', '#telegram-button'];
 function setLocked(locked) {
   unlocked = !locked;
@@ -187,14 +192,17 @@ async function apiFetch(url, options = {}) {
   return response;
 }
 async function refreshCloud() {
-  if (!unlocked || conflictSnapshot) return;
+  if (!unlocked) return;
   if (syncBusy) { syncAgain = true; return; }
   syncBusy = true;
+  clearTimeout(retryTimer);
+  retryTimer = 0;
+  let retryDelay = 0;
   try {
     for (let attempt = 0; attempt < 6; attempt++) {
       syncAgain = false;
       const response = await apiFetch(API);
-      if (!response.ok) throw new Error('הענן לא זמין כרגע; השינויים ממתינים במכשיר');
+      if (!response.ok) throw new Error('הענן לא זמין כרגע');
       const revision = response.headers.get('etag');
       if (!revision) throw new Error('גרסת השרת אינה תואמת. יש לרענן אחרי העדכון.');
       const raw = await response.json();
@@ -203,35 +211,41 @@ async function refreshCloud() {
       if (!baseState && !dirty && hasData(state) && raw?.version !== 2 && !hasData(remote)) dirty = true;
       if (!dirty) {
         state = remote; baseState = structuredClone(remote); saveLocal(); render();
-        setStatus('מסונכרן לענן · גישה מוגנת');
+        setStatus('מסונכרן');
         return;
       }
-      const merged = baseState ? mergeChanges(baseState, state, remote) : migrateLegacyPending(state, remote);
-      if (merged.conflicts.length) { showConflict(remote); return; }
+      // Different devices keep their own new entries. The same detail keeps whichever save landed last.
+      const merged = baseState
+        ? mergeChanges(baseState, state, remote, { preferLocal: true })
+        : migrateLegacyPending(state, remote);
       state = normalizeState(merged.state);
       baseState = structuredClone(remote);
-      if (JSON.stringify(state) === JSON.stringify(remote)) { dirty = false; saveLocal(); render(); setStatus('מסונכרן לענן · גישה מוגנת'); return; }
+      if (JSON.stringify(state) === JSON.stringify(remote)) { dirty = false; saveLocal(); render(); setStatus('מסונכרן'); return; }
       saveLocal(); render();
       const submitted = structuredClone(state);
-      setStatus('מסנכרן לענן…');
+      setStatus('מסנכרן…');
       const saved = await apiFetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Budget-Revision': revision }, body: JSON.stringify(submitted) });
       if (saved.status === 409) continue;
-      if (!saved.ok) throw new Error(saved.status === 413 ? 'התקציב גדול מדי לשמירה; הורד גיבוי לפני המשך' : 'השמירה בענן נכשלה; השינויים נשמרו במכשיר');
+      if (!saved.ok) throw new Error(saved.status === 413 ? 'התקציב גדול מדי לשמירה; הורד גיבוי לפני המשך' : 'השמירה לענן לא עברה, מנסה שוב');
       const acknowledged = normalizeState(await saved.json());
-      // Preserve edits made while the request was in flight.
-      const next = mergeChanges(submitted, state, acknowledged);
-      if (next.conflicts.length) { baseState = submitted; showConflict(acknowledged); return; }
+      const next = mergeChanges(submitted, state, acknowledged, { preferLocal: true });
       baseState = structuredClone(acknowledged);
       state = normalizeState(next.state);
       dirty = JSON.stringify(state) !== JSON.stringify(acknowledged);
       saveLocal(); render();
-      if (!dirty && !syncAgain) { setStatus('מסונכרן לענן · גישה מוגנת'); return; }
+      if (!dirty && !syncAgain) { setStatus('מסונכרן'); return; }
     }
-    setStatus('התקציב משתנה במכשיר נוסף; השינויים ממתינים. לחץ על ניסיון סנכרון.');
+    retryDelay = 2000;
+    setStatus('מסנכרן…');
   } catch (error) {
     cloudActive = false;
-    setStatus(error.message);
-  } finally { syncBusy = false; }
+    setStatus(error.message === 'נדרשת כניסה מחדש' ? error.message : 'מסנכרן…');
+    if (error.message !== 'נדרשת כניסה מחדש') retryDelay = 3000;
+  } finally {
+    syncBusy = false;
+    if (syncAgain) { syncAgain = false; void refreshCloud(); }
+    else if (retryDelay) scheduleRetry(retryDelay);
+  }
 }
 async function connectCloud() {
   try {
@@ -254,6 +268,8 @@ function refreshDate() {
 window.addEventListener('focus', () => { refreshDate(); void refreshCloud(); });
 window.addEventListener('online', () => { void refreshCloud(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshDate(); void refreshCloud(); } });
+const poll = setInterval(() => { if (!document.hidden) void refreshCloud(); }, 12000);
+poll.unref?.();
 // Prevent a stale tab on the same device overwriting an unacknowledged edit.
 window.addEventListener('storage', event => {
   if (event.key !== SNAPSHOT_KEY || !event.newValue || syncBusy || dirty) return;
@@ -816,7 +832,6 @@ document.querySelector('#logout-button').addEventListener('click', async () => {
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
   cloudActive = false; setLocked(true);
 });
-document.querySelector('#retry-sync').addEventListener('click', () => { void refreshCloud(); });
 document.querySelector('#conflict-local').addEventListener('click', () => {
   if (!conflictSnapshot) return;
   if (!backupLocal()) { setStatus('לא ניתן לשמור גיבוי מקומי. הורד גיבוי לפני בחירת גרסה.'); return; }

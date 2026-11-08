@@ -143,7 +143,7 @@ test('Telegram retries concurrent storage writes and deduplicates delivery', asy
 test('browser finance functions show correct balance with monthly debts and restore principal on deletion', async () => {
   const source = (await readFile(new URL('../app.js', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '');
   const el = () => ({ addEventListener() {}, classList: { toggle() {} }, dataset: {}, style: {}, replaceChildren() {}, querySelector: el, append() {} });
-  const context = vm.createContext({ structuredClone, cardGroups, commitmentAmount, mergeChanges, migrateLegacyPending, console, Date, Intl,
+  const context = vm.createContext({ structuredClone, cardGroups, commitmentAmount, mergeChanges, migrateLegacyPending, console, Date, Intl, setInterval, clearTimeout, setTimeout,
     crypto: globalThis.crypto, document: { querySelector: el, addEventListener() {}, createElement: el }, window: { addEventListener() {} },
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} }, confirm: () => true });
   vm.runInContext(source.slice(0, source.indexOf("document.querySelector('#expense-form').addEventListener")), context);
