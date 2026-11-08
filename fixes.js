@@ -98,17 +98,20 @@ function renderPaidCredits() {
   }
 }
 
+let enhancing = false;
 function enhance() {
-  paintNegatives();
-  renderPaidCredits();
+  if (enhancing) return;
+  enhancing = true;
+  try {
+    paintNegatives();
+    renderPaidCredits();
+  } finally {
+    enhancing = false;
+  }
 }
 
-const root = document.querySelector('#budget-app');
-if (root) {
-  const obs = new MutationObserver(() => enhance());
-  obs.observe(root, { childList: true, subtree: true, characterData: true });
-}
-
-setTimeout(enhance, 800);
-setTimeout(enhance, 2000);
-window.addEventListener('focus', () => setTimeout(enhance, 300));
+// Do not observe the whole app — that caused an infinite loop freeze.
+setTimeout(enhance, 600);
+setTimeout(enhance, 1500);
+setTimeout(enhance, 3000);
+window.addEventListener('focus', () => setTimeout(enhance, 200));
