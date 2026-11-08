@@ -19,11 +19,11 @@
     .salary-bar i{display:block;height:100%;width:0;background:#d7dde8}
     .mark{display:none}
     .brand h1{font-size:13px;font-weight:500;letter-spacing:.08em;color:#9aa0ab}
-    .today{color:#6e7480;font-size:12px}
+    .today{color:#a3a7b2;font-size:12px}
     .top{align-items:flex-start}
     .icon-button,.outline-button,.small-button{background:transparent;border-color:#343844;color:#d5d8df;border-radius:12px}
     .hero{border:1px solid #2c313c;background:#16181e;box-shadow:none;border-radius:22px;padding:28px 22px 22px;margin-top:8px}
-    .cycle{color:#6e7480}
+    .cycle{color:#a3a7b2}
     .label{color:#9aa0ab;font-size:14px}
     .amount{font-size:64px;font-weight:700;letter-spacing:-2px;line-height:1;margin:8px 0 10px}
     .sub{color:#b7bcc6;font-size:14px;line-height:1.6}
@@ -69,10 +69,10 @@
       <section class="section"><div class="section-head"><h2>תנועות במחזור</h2><span class="section-note">מזומן מהכיס לא נספר</span></div><div class="list" id="transactions"></div></section>
       <div class="sync-footer"><p class="notice" id="sync-status" role="status">מתחבר…</p></div>
     </main>
-    <dialog id="expense-dialog"><form class="form" id="expense-form"><div class="formhead"><h2>הוצאה חדשה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label>על מה הוצאת?</label><input name="name" maxlength="80" placeholder="למשל: קניות בסופר" required /></div><div class="form-grid"><div class="field"><label>סכום</label><input name="amount" type="number" min="0.01" step="0.01" placeholder="0" required /></div><div class="field"><label>תאריך הקנייה</label><input name="date" type="date" required /></div></div><div class="field"><label>איך שילמת?</label><select name="method"><option value="debit">דיירקט · יורד מיד</option><option value="credit">אשראי · חיוב בהמשך</option><option value="cash">מזומן</option></select></div><p class="hint">דיירקט ואשראי יורדים מהמשכורת. מזומן מהכיס לא.</p><button class="save" type="submit">שמירת ההוצאה</button></form></dialog>
-    <dialog id="income-dialog"><form class="form" id="income-form"><div class="formhead"><h2>משכורת או הכנסה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label>תיאור</label><input name="name" value="משכורת" maxlength="80" /></div><div class="form-grid"><div class="field"><label>סכום שנכנס</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>תאריך כניסה</label><input name="date" type="date" required /></div></div><button class="save" type="submit">רישום ההכנסה</button></form></dialog>
-    <dialog id="cash-withdrawal-dialog"><form class="form" id="cash-withdrawal-form"><div class="formhead"><h2>משיכת מזומן</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><p class="hint">משיכה מהבנק יורדת מהמשכורת. מזומן שהיה בכיס לא.</p><div class="form-grid"><div class="field"><label>סכום</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>תאריך</label><input name="date" type="date" required /></div></div><button class="save" type="submit">רישום המשיכה</button></form></dialog>
+    <dialog id="expense-dialog"><form class="form" id="expense-form"><div class="formhead"><h2>הוצאה חדשה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label>על מה הוצאת?<input name="name" maxlength="80" placeholder="למשל: קניות בסופר" required /></label></div><div class="form-grid"><div class="field"><label>סכום<input name="amount" type="number" min="0.01" step="0.01" placeholder="0" required /></label></div><div class="field"><label>תאריך הקנייה<input name="date" type="date" required /></label></div></div><div class="field"><label>איך שילמת?<select name="method"><option value="debit">דיירקט · יורד מיד</option><option value="credit">אשראי · חיוב בהמשך</option><option value="cash">מזומן</option></select></label></div><p class="hint">דיירקט ואשראי יורדים מהמשכורת. מזומן מהכיס לא.</p><button class="save" type="submit">שמירת ההוצאה</button></form></dialog>
+    <dialog id="income-dialog"><form class="form" id="income-form"><div class="formhead"><h2>משכורת או הכנסה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label>תיאור<input name="name" value="משכורת" maxlength="80" /></label></div><div class="form-grid"><div class="field"><label>סכום שנכנס<input name="amount" type="number" min="0.01" step="0.01" required /></label></div><div class="field"><label>תאריך כניסה<input name="date" type="date" required /></label></div></div><button class="save" type="submit">רישום ההכנסה</button></form></dialog>
+    <dialog id="cash-withdrawal-dialog"><form class="form" id="cash-withdrawal-form"><div class="formhead"><h2>משיכת מזומן</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><p class="hint">משיכה מהבנק יורדת מהמשכורת. מזומן שהיה בכיס לא.</p><div class="form-grid"><div class="field"><label>סכום<input name="amount" type="number" min="0.01" step="0.01" required /></label></div><div class="field"><label>תאריך<input name="date" type="date" required /></label></div></div><button class="save" type="submit">רישום המשיכה</button></form></dialog>
     <div id="extra-dialogs"></div>
-    <script type="module" src="/boot.js?v=10"></script>
+    <script type="module" src="/boot.js?v=11"></script>
   </body>
 </html>

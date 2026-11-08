@@ -395,7 +395,7 @@ function render() {
   note.textContent = position.income > 0
     ? 'המספר אומר אם נשארת בתוך המשכורת. מזומן שהיה עליך קודם לא מוריד אותו.'
     : 'עוד אין משכורת במחזור הזה. אחרי שתוסיף אותה, תראה מה נשאר.';
-  document.querySelector('#next-payday').textContent = dateLabel(toISODate(new Date(range.end.getFullYear(), range.end.getMonth(), Number(state.settings.paydayDay) || 10)), { day: 'numeric', month: 'long' });
+  document.querySelector('#next-payday').textContent = dateLabel(toISODate(new Date(range.start.getFullYear(), range.start.getMonth() + 1, Number(state.settings.paydayDay) || 10, 12)), { day: 'numeric', month: 'long' });
   const bar = document.querySelector('#salary-bar');
   const ratio = position.income > 0 ? Math.max(0, Math.min(1, position.left / position.income)) : 0;
   if (bar) bar.style.width = `${ratio * 100}%`;
@@ -418,7 +418,7 @@ function renderCommitments(items, range) {
     row.className = 'list-row';
     row.innerHTML = '<div class="row-info"><strong></strong><small></small></div><b></b><button class="small-button" type="button">סמן כשולם</button>';
     row.querySelector('strong').textContent = item.name;
-    row.querySelector('small').textContent = `${item.kind === 'debt' ? 'החזר חוב' : CATEGORIES[item.category] || 'קבועה'} · ${dateLabel(item.dueDate)} · ${item.kind === 'debt' ? 'העברה/דיירקט' : METHODS[item.method]}`;
+    row.querySelector('small').textContent = `${item.kind === 'debt' ? 'החזר חוב' : 'קבועה'} · ${dateLabel(item.dueDate)} · ${item.kind === 'debt' ? 'העברה/דיירקט' : METHODS[item.method]}`;
     row.querySelector('b').textContent = money(item.kind === 'debt' ? item.monthlyPayment : item.amount);
     row.querySelector('button').addEventListener('click', () => item.kind === 'debt' ? openDebtPayment(item, range) : payFixed(item, range));
     holder.append(row);
@@ -546,7 +546,7 @@ function renderTemplates() {
     row.querySelector('strong').textContent = item.name;
     row.querySelector('small').textContent = item.kind === 'debt'
       ? `חוב: ${money(item.balance)} · תשלום ביום ${item.dueDay}`
-      : `קבועה · ${CATEGORIES[item.category] || 'אחר'} · יום ${item.dueDay} · ${METHODS[item.method]}`;
+      : `קבועה · יום ${item.dueDay} · ${METHODS[item.method]}`;
     row.querySelector('b').textContent = money(item.kind === 'debt' ? item.monthlyPayment : item.amount);
     row.querySelector('button').addEventListener('click', () => {
       if (!confirm(`למחוק את ${item.name} מהתשלומים הקבועים?`)) return;
@@ -590,7 +590,7 @@ document.querySelector('#fixed-form').addEventListener('submit', event => {
   const data = new FormData(event.currentTarget);
   state.obligations.push({
     id: makeId(), name: String(data.get('name')).trim(), amount: Number(data.get('amount')),
-    category: String(data.get('category')), method: String(data.get('method')), dueDay: Number(data.get('dueDay')),
+    category: 'other', method: String(data.get('method')), dueDay: Number(data.get('dueDay')),
   });
   void saveState(); render(); renderTemplates();
   event.currentTarget.reset();
