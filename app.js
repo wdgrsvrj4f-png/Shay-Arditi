@@ -139,7 +139,7 @@ function scheduleRetry(delay) {
   clearTimeout(retryTimer);
   retryTimer = setTimeout(() => { retryTimer = 0; void refreshCloud(); }, delay);
 }
-const startupButtons = ['#add-expense', '#add-income', '#add-cash', '#manage-button', '#manage-button-secondary', '#settings-button', '#add-credit-bill', '#telegram-button'];
+const startupButtons = ['#add-expense', '#add-income', '#add-cash', '#manage-button', '#manage-button-secondary', '#settings-button', '#add-credit-bill'];
 function setLocked(locked) {
   unlocked = !locked;
   document.querySelector('#budget-app').hidden = locked;
@@ -782,31 +782,6 @@ document.querySelector('#allocate-surplus').addEventListener('click', () => {
 document.querySelector('#settings-button').addEventListener('click', () => { populateSettings(); document.querySelector('#settings-dialog').showModal(); });
 document.querySelector('#manage-button').addEventListener('click', () => { renderTemplates(); document.querySelector('#manage-dialog').showModal(); });
 document.querySelector('#manage-button-secondary').addEventListener('click', () => { renderTemplates(); document.querySelector('#manage-dialog').showModal(); });
-document.querySelector('#telegram-button').addEventListener('click', () => { document.querySelector('#telegram-result').textContent = ''; document.querySelector('#telegram-dialog').showModal(); });
-document.querySelector('#telegram-setup-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const button = form.querySelector('.save');
-  const result = document.querySelector('#telegram-result');
-  button.disabled = true;
-  result.textContent = 'מחבר את הבוט…';
-  try {
-    const response = await apiFetch('/api/telegram/setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: String(new FormData(form).get('code')) }),
-    });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error || 'החיבור נכשל');
-    result.textContent = 'ה-webhook פעיל. עכשיו שלח לבוט בטלגרם: /pair ואותו קוד.';
-  } catch (error) {
-    result.textContent = error.message === 'Telegram setup is incomplete'
-      ? 'חסרים משתני החיבור ב-Netlify. אחרי שמגדירים אותם, צריך לפרוס שוב ולנסות כאן.'
-      : error.message || 'החיבור נכשל. בדוק את קוד החיבור ונסה שוב.';
-  } finally {
-    button.disabled = false;
-  }
-});
 document.querySelector('#add-expense').addEventListener('click', () => { document.querySelector('#expense-form').elements.date.value = todayISO; document.querySelector('#expense-dialog').showModal(); });
 document.querySelector('#add-income').addEventListener('click', () => { document.querySelector('#income-form').elements.date.value = todayISO; document.querySelector('#income-dialog').showModal(); });
 document.querySelector('#add-cash').addEventListener('click', () => { document.querySelector('#cash-withdrawal-form').elements.date.value = todayISO; document.querySelector('#cash-withdrawal-dialog').showModal(); });
