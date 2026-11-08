@@ -174,6 +174,7 @@ function saveState() {
   return refreshCloud();
 }
 async function apiFetch(url, options = {}) {
+  const response = await fetch(url, { ...options, cache: 'no-store', credentials: 'same-origin' });
   if (response.status === 401) {
     cloudActive = false;
     document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
