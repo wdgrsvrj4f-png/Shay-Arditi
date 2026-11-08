@@ -2,6 +2,7 @@ const API = '/api/budget';
 const STORAGE_KEY = 'simple-budget-v2';
 const CATEGORIES = {
   groceries: 'אוכל וקניות',
+  fuel: 'דלק',
   transport: 'תחבורה',
   home: 'בית וחשבונות',
   health: 'בריאות',

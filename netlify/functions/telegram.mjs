@@ -5,6 +5,7 @@ const store = getStore("simple-budget");
 const blobKey = "shared-budget";
 const categories = {
   groceries: "אוכל וקניות",
+  fuel: "דלק",
   transport: "תחבורה",
   home: "בית וחשבונות",
   health: "בריאות",
@@ -118,7 +119,8 @@ function parseMethod(text) {
 
 function parseCategory(text) {
   if (/סופר|מכולת|שוק|קניות|אוכל/.test(text)) return "groceries";
-  if (/דלק|מונית|רב.?קו|אוטובוס|רכבת|חניה|תחבורה/.test(text)) return "transport";
+  if (/דלק|תדלוק|בנזין|תחנת דלק/.test(text)) return "fuel";
+  if (/מונית|רב.?קו|אוטובוס|רכבת|חניה|תחבורה/.test(text)) return "transport";
   if (/חשמל|מים|ארנונה|אינטרנט|שכירות|בית/.test(text)) return "home";
   if (/תרופה|רופא|מרפאה|בריאות|בית.?מרקחת/.test(text)) return "health";
   if (/בילוי|סרט|קפה|מסעדה|בר|שווארמה|פיצה/.test(text)) return "leisure";

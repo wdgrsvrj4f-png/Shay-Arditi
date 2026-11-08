@@ -6,7 +6,7 @@ const maxBodyBytes = 256_000;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const transactionTypes = new Set(["income", "expense", "debt_payment", "cash_withdrawal"]);
 const methods = new Set(["debit", "credit", "cash", "bank"]);
-const categories = new Set(["groceries", "transport", "home", "health", "leisure", "other"]);
+const categories = new Set(["groceries", "fuel", "transport", "home", "health", "leisure", "other"]);
 const destinations = new Set(["reserve", "savings", "debt", "next_cycle", "other"]);
 
 function reply(data, status = 200) {
