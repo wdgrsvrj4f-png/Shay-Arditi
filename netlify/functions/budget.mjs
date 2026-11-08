@@ -18,7 +18,7 @@ export function createBudgetHandler(getStore = budgetStore) {
         const { data, revision } = await readSnapshot(store);
         return reply(publicState(data), 200, { ETag: revision });
       }
-      const revision = request.headers.get('if-match');
+      const revision = request.headers.get('x-budget-revision') || request.headers.get('if-match');
       if (!revision) return reply({ error: 'Reload the updated app before saving' }, 428);
       const payload = await readJSON(request);
       if (!payload || typeof payload !== 'object') return reply({ error: 'Invalid budget data' }, 400);

@@ -214,7 +214,7 @@ async function refreshCloud() {
       saveLocal(); render();
       const submitted = structuredClone(state);
       setStatus('מסנכרן לענן…');
-      const saved = await apiFetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': revision }, body: JSON.stringify(submitted) });
+      const saved = await apiFetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Budget-Revision': revision }, body: JSON.stringify(submitted) });
       if (saved.status === 409) continue;
       if (!saved.ok) throw new Error(saved.status === 413 ? 'התקציב גדול מדי לשמירה; הורד גיבוי לפני המשך' : 'השמירה בענן נכשלה; השינויים נשמרו במכשיר');
       const acknowledged = normalizeState(await saved.json());

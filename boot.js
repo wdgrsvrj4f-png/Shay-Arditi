@@ -6,5 +6,5 @@ try {
   ]);
   if (root) root.innerHTML = parts.join('');
 } catch (_) {}
-await import('/app.js?v=salary-left-1');
+await import('/app.js?v=salary-left-2');
 await import('/fixes.js?v=2');
