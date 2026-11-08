@@ -108,6 +108,11 @@ test('ETag writes preserve Telegram private state and reject stale/missing revis
   const next = await latest.json();
   next.settings.budgets.fuel = 124;
   assert.equal((await handler(request('/api/budget', { method: 'PUT', body: next, headers: { 'X-Budget-Revision': nextRevision } }))).status, 200);
+  const bare = await handler(request('/api/budget'));
+  const bareRevision = bare.headers.get('x-budget-revision').replace(/^"|"$/g, '');
+  const bareBody = await bare.json();
+  bareBody.settings.budgets.fuel = 125;
+  assert.equal((await handler(request('/api/budget', { method: 'PUT', body: bareBody, headers: { 'X-Budget-Revision': bareRevision } }))).status, 200);
   assert.equal((await handler(request('/api/budget', { method: 'PUT', body: data, revision }))).status, 409);
   assert.equal((await store.getWithMetadata()).data.telegramChatId, '123');
 });

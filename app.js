@@ -203,7 +203,7 @@ async function refreshCloud() {
       syncAgain = false;
       const response = await apiFetch(API);
       if (!response.ok) throw new Error('הענן לא זמין כרגע');
-      const revision = response.headers.get('etag');
+      const revision = response.headers.get('x-budget-revision') || response.headers.get('etag');
       if (!revision) throw new Error('גרסת השרת אינה תואמת. יש לרענן אחרי העדכון.');
       const raw = await response.json();
       const remote = normalizeState(raw);
