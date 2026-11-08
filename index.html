@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="he">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -37,7 +37,8 @@
     .wrap{width:min(100% - 28px,520px)!important;margin-left:auto;margin-right:auto}
     @media(min-width:900px){.wrap{width:min(100% - 48px,520px)!important;display:block!important;margin:28px auto 64px}.section{margin-top:14px}.top,.hero,.balances,.surplus,.notice,.sync-footer{grid-column:auto}}
     @media(max-width:560px){.amount{font-size:52px}.hero{padding:22px 16px}}
-    html,body{overflow-x:hidden;max-width:100%}
+    html{direction:ltr;overflow-x:clip;max-width:100%;overscroll-behavior-x:none}
+    body{direction:rtl;width:100%;max-width:100%;overflow-x:clip;overscroll-behavior-x:none;touch-action:pan-y pinch-zoom;position:relative}
     .wrap,.hero,.section,.list,.top,.actions,.section-head{min-width:0;max-width:100%}
     .list-row{min-width:0;max-width:100%;flex-wrap:wrap}
     .row-info small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -45,7 +46,7 @@
     .amount{max-width:100%;overflow-wrap:anywhere}
     </style>
   </head>
-  <body>
+  <body dir="rtl">
     <section id="login-panel" class="login-panel">
       <div class="login-mark">₪</div><h1>התקציב שלי</h1>
       <p>המידע שלך, מאחורי קוד כניסה אישי.</p>
