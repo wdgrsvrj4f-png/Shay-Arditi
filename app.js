@@ -123,7 +123,6 @@ function hasData(state) {
 }
 
 const SNAPSHOT_KEY = 'simple-budget-sync-v3';
-const RECOVERY_KEY = 'simple-budget-recovery-v3';
 let cached;
 try { cached = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null'); } catch {}
 let state = normalizeState(cached?.state || readLocal());
@@ -134,12 +133,11 @@ let unlocked = false;
 let syncBusy = false;
 let syncAgain = false;
 let retryTimer = 0;
-let conflictSnapshot = null;
 function scheduleRetry(delay) {
   clearTimeout(retryTimer);
   retryTimer = setTimeout(() => { retryTimer = 0; void refreshCloud(); }, delay);
 }
-const startupButtons = ['#add-expense', '#add-income', '#add-cash', '#manage-button', '#manage-button-secondary', '#settings-button', '#add-credit-bill'];
+const startupButtons = ['#add-expense', '#add-income', '#add-cash', '#manage-button-secondary', '#settings-button', '#add-credit-bill'];
 function setLocked(locked) {
   unlocked = !locked;
   document.querySelector('#budget-app').hidden = locked;
@@ -165,23 +163,13 @@ function needsCloudSync() {
   try { return localStorage.getItem(PENDING_SYNC_KEY) === '1'; } catch { return false; }
 }
 function setStatus(message) { document.querySelector('#sync-status').textContent = message; }
-function backupLocal() {
-  try { localStorage.setItem(RECOVERY_KEY, JSON.stringify({ state, base: baseState, savedAt: new Date().toISOString() })); return true; }
-  catch { return false; }
-}
 function saveState() {
   dirty = true;
   saveLocal();
   if (!unlocked) return Promise.resolve();
   return refreshCloud();
 }
-function showConflict(remote) {
-  conflictSnapshot = remote;
-  document.querySelector('#conflict-panel').hidden = false;
-  setStatus('אותו פרט שונה בשני מכשירים. בחר איזו גרסה לשמור.');
-}
 async function apiFetch(url, options = {}) {
-  const response = await fetch(url, { ...options, cache: 'no-store', credentials: 'same-origin' });
   if (response.status === 401) {
     cloudActive = false;
     document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
@@ -226,7 +214,7 @@ async function refreshCloud() {
       setStatus('מסנכרן…');
       const saved = await apiFetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Budget-Revision': revision }, body: JSON.stringify(submitted) });
       if (saved.status === 409) continue;
-      if (!saved.ok) throw new Error(saved.status === 413 ? 'התקציב גדול מדי לשמירה; הורד גיבוי לפני המשך' : 'השמירה לענן לא עברה, מנסה שוב');
+      if (!saved.ok) throw new Error(saved.status === 413 ? 'התקציב גדול מדי לשמירה. הנתונים נשארו במכשיר.' : 'השמירה לענן לא עברה, מנסה שוב');
       const acknowledged = normalizeState(await saved.json());
       const next = mergeChanges(submitted, state, acknowledged, { preferLocal: true });
       baseState = structuredClone(acknowledged);
@@ -395,12 +383,7 @@ function salaryPosition(range) {
 function render() {
   const range = cycleRange();
   const transactions = cycleTransactions(range);
-  const expenses = transactions.filter(item => item.type === 'expense' && item.budgeted !== false);
-  const totalBudget = Object.values(state.settings.budgets).reduce((sum, value) => sum + (Number(value) || 0), 0);
-  const spent = expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const remaining = totalBudget - spent;
   const pending = getPendingCommitments(range);
-  const pendingCards = getCardGroups();
   const position = salaryPosition(range);
   document.querySelector('#cycle-title').textContent = `מחזור ${dateLabel(toISODate(range.start), { day: 'numeric', month: 'long' })}–${dateLabel(toISODate(range.end), { day: 'numeric', month: 'long' })}`;
   const freeEl = document.querySelector('#free-to-spend');
@@ -412,44 +395,15 @@ function render() {
   note.textContent = position.income > 0
     ? 'המספר אומר אם נשארת בתוך המשכורת. מזומן שהיה עליך קודם לא מוריד אותו.'
     : 'עוד אין משכורת במחזור הזה. אחרי שתוסיף אותה, תראה מה נשאר.';
-
-  document.querySelector('#cycle-remaining').textContent = money(remaining);
-  document.querySelector('#budget-total').textContent = money(totalBudget);
-  document.querySelector('#spent-total').textContent = money(spent);
-  document.querySelector('#bank-estimate').textContent = money(bankBalance());
-  document.querySelector('#bank-now').textContent = money(bankBalance());
-  document.querySelector('#cash-now').textContent = money(cashBalance());
   document.querySelector('#next-payday').textContent = dateLabel(toISODate(new Date(range.end.getFullYear(), range.end.getMonth(), Number(state.settings.paydayDay) || 10)), { day: 'numeric', month: 'long' });
-  document.querySelector('#credit-settings-caption').textContent = `סגירה ב־${state.settings.creditClosingDay} · חיוב ב־${state.settings.creditPaymentDay}`;
   const bar = document.querySelector('#salary-bar');
   const ratio = position.income > 0 ? Math.max(0, Math.min(1, position.left / position.income)) : 0;
   if (bar) bar.style.width = `${ratio * 100}%`;
-  document.querySelector('#cycle-remaining').dataset.value = String(remaining);
   document.querySelector('#sync-status').classList.toggle('warning', !cloudActive);
 
-  renderBudgets(expenses);
   renderCommitments(pending, range);
   renderCards(getCardGroups());
   renderTransactions(transactions);
-  renderSurplus(position.left, position.left, range);
-}
-
-function renderBudgets(expenses) {
-  const holder = document.querySelector('#category-budgets');
-  holder.replaceChildren();
-  for (const [key, label] of Object.entries(CATEGORIES)) {
-    const limit = Number(state.settings.budgets[key]) || 0;
-    const amount = expenses.filter(item => item.category === key).reduce((sum, item) => sum + Number(item.amount), 0);
-    const left = limit - amount;
-    const card = document.createElement('div');
-    card.className = 'category-card';
-    card.innerHTML = '<div class="category-top"><strong></strong><span></span></div><div class="tiny-bar"><i></i></div><small></small>';
-    card.querySelector('strong').textContent = label;
-    card.querySelector('span').textContent = `${money(amount)} / ${money(limit)}`;
-    card.querySelector('i').style.width = `${limit > 0 ? Math.max(0, Math.min(100, amount / limit * 100)) : 0}%`;
-    card.querySelector('small').textContent = limit > 0 ? (left >= 0 ? `נשארו ${money(left)}` : `חריגה של ${money(Math.abs(left))}`) : 'הגדר יעד בהגדרות';
-    holder.append(card);
-  }
 }
 
 function renderCommitments(items, range) {
@@ -503,7 +457,7 @@ function renderTransactions(transactions) {
     const row = document.createElement('article');
     row.className = 'list-row transaction-row';
     const offSalary = item.type === 'expense' && item.method === 'cash';
-    const type = item.type === 'income' ? 'הכנסה' : item.type === 'debt_payment' ? 'החזר חוב' : item.type === 'cash_withdrawal' ? 'משיכת מזומן' : (CATEGORIES[item.category] || 'הוצאה');
+    const type = item.type === 'income' ? 'הכנסה' : item.type === 'debt_payment' ? 'החזר חוב' : item.type === 'cash_withdrawal' ? 'משיכת מזומן' : 'הוצאה';
     const method = item.type === 'income' ? '' : METHODS[item.method] || '';
     const sign = item.type === 'income' ? '+' : offSalary ? '' : '−';
     row.innerHTML = '<div class="row-info"><strong></strong><small></small></div><b></b><button class="delete-button" type="button" aria-label="מחיקת תנועה">×</button>';
@@ -513,18 +467,6 @@ function renderTransactions(transactions) {
     row.querySelector('button').addEventListener('click', () => deleteTransaction(item.id));
     holder.append(row);
   }
-}
-
-function renderSurplus(remaining, bankAfterKnown, range) {
-  const paidAllocations = state.surplusActions.filter(item => item.cycleKey === range.key).reduce((sum, item) => sum + Number(item.amount), 0);
-  const available = Math.max(0, Math.min(remaining, bankAfterKnown) - paidAllocations);
-  document.querySelector('#surplus-amount').textContent = money(available);
-  document.querySelector('#surplus-amount').dataset.value = String(available);
-  document.querySelector('#surplus-note').textContent = available > 0
-    ? 'עודף משוער אחרי חיובים ידועים. רישום יעד אינו מעביר כסף בפועל.'
-    : 'עודף אמיתי יופיע רק אחרי ששומרים כסף לחשבונות ולחיובי אשראי שעוד לא ירדו.';
-  document.querySelector('#allocate-surplus').disabled = available <= 0;
-  document.querySelector('#surplus-history').textContent = paidAllocations > 0 ? `כבר שויכו במחזור הזה ${money(paidAllocations)} ליעדים.` : '';
 }
 
 function addTransaction(transaction) {
@@ -586,10 +528,7 @@ function deleteTransaction(id) {
 
 function populateSettings() {
   const form = document.querySelector('#settings-form');
-  for (const key of ['paydayDay', 'creditClosingDay', 'creditPaymentDay', 'openingDate', 'openingBankBalance', 'openingCashBalance']) {
-    form.elements[key].value = state.settings[key];
-  }
-  for (const key of Object.keys(CATEGORIES)) form.elements[`budget-${key}`].value = state.settings.budgets[key] || 0;
+  for (const key of ['paydayDay', 'creditClosingDay', 'creditPaymentDay']) form.elements[key].value = state.settings[key];
 }
 
 function renderTemplates() {
@@ -631,7 +570,7 @@ document.querySelector('#expense-form').addEventListener('submit', event => {
   const date = String(data.get('date'));
   addTransaction({
     type: 'expense', name: String(data.get('name')).trim(), amount: Number(data.get('amount')),
-    category: String(data.get('category')), method, date, budgeted: true,
+    category: 'other', method, date, budgeted: true,
     creditDueDate: method === 'credit' ? creditDueDate(date) : undefined,
   });
   event.currentTarget.reset();
@@ -744,43 +683,11 @@ document.querySelector('#settings-form').addEventListener('submit', event => {
   state.settings.paydayDay = Number(form.elements.paydayDay.value);
   state.settings.creditClosingDay = Number(form.elements.creditClosingDay.value);
   state.settings.creditPaymentDay = Number(form.elements.creditPaymentDay.value);
-  state.settings.openingDate = form.elements.openingDate.value;
-  state.settings.openingBankBalance = Number(form.elements.openingBankBalance.value);
-  state.settings.openingCashBalance = Number(form.elements.openingCashBalance.value);
-  for (const key of Object.keys(CATEGORIES)) state.settings.budgets[key] = Number(form.elements[`budget-${key}`].value) || 0;
   void saveState(); render();
   document.querySelector('#settings-dialog').close();
 });
 
-document.querySelector('#surplus-form').addEventListener('submit', event => {
-  event.preventDefault();
-  const data = new FormData(event.currentTarget);
-  const limit = Number(document.querySelector('#surplus-amount').dataset.value || 0);
-  const amount = Number(data.get('amount'));
-  if (!Number.isFinite(amount) || amount <= 0 || amount > limit) {
-    event.currentTarget.elements.amount.setCustomValidity(`אפשר לשייך עד ${Math.floor(limit)} ₪`);
-    event.currentTarget.elements.amount.reportValidity();
-    return;
-  }
-  event.currentTarget.elements.amount.setCustomValidity('');
-  state.surplusActions.push({
-    id: makeId(), cycleKey: cycleRange().key, amount,
-    destination: String(data.get('destination')), note: String(data.get('note') || '').trim(), date: todayISO,
-  });
-  void saveState(); render();
-  event.currentTarget.reset();
-  document.querySelector('#surplus-dialog').close();
-});
-
-document.querySelector('#allocate-surplus').addEventListener('click', () => {
-  const available = Math.max(0, Number(document.querySelector('#surplus-amount').dataset.value || 0));
-  document.querySelector('#surplus-form').elements.amount.max = String(Math.floor(available));
-  document.querySelector('#surplus-form').elements.amount.value = Math.floor(available);
-  document.querySelector('#surplus-dialog').showModal();
-});
-
 document.querySelector('#settings-button').addEventListener('click', () => { populateSettings(); document.querySelector('#settings-dialog').showModal(); });
-document.querySelector('#manage-button').addEventListener('click', () => { renderTemplates(); document.querySelector('#manage-dialog').showModal(); });
 document.querySelector('#manage-button-secondary').addEventListener('click', () => { renderTemplates(); document.querySelector('#manage-dialog').showModal(); });
 document.querySelector('#add-expense').addEventListener('click', () => { document.querySelector('#expense-form').elements.date.value = todayISO; document.querySelector('#expense-dialog').showModal(); });
 document.querySelector('#add-income').addEventListener('click', () => { document.querySelector('#income-form').elements.date.value = todayISO; document.querySelector('#income-dialog').showModal(); });
@@ -808,28 +715,6 @@ document.querySelector('#logout-button').addEventListener('click', async () => {
   if (!response?.ok) { setStatus('היציאה נכשלה. נסה שוב כשהחיבור חוזר.'); return; }
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
   cloudActive = false; setLocked(true);
-});
-document.querySelector('#conflict-local').addEventListener('click', () => {
-  if (!conflictSnapshot) return;
-  if (!backupLocal()) { setStatus('לא ניתן לשמור גיבוי מקומי. הורד גיבוי לפני בחירת גרסה.'); return; }
-  const remote = conflictSnapshot;
-  state = normalizeState(mergeChanges(baseState || { ...remote, settings: {}, obligations: [], debts: [], transactions: [], creditPayments: [], surplusActions: [] }, state, remote, { preferLocal: true }).state);
-  baseState = structuredClone(remote); conflictSnapshot = null; dirty = true;
-  document.querySelector('#conflict-panel').hidden = true; saveLocal(); render(); void refreshCloud();
-});
-document.querySelector('#conflict-cloud').addEventListener('click', () => {
-  if (!conflictSnapshot) return;
-  if (!backupLocal()) { setStatus('לא ניתן לשמור גיבוי מקומי. הורד גיבוי לפני בחירת גרסה.'); return; }
-  const remote = conflictSnapshot;
-  // Keep unrelated local edits; only conflicting fields use the cloud value.
-  state = normalizeState(baseState ? mergeChanges(baseState, state, remote).state : migrateLegacyPending(state, remote).state);
-  baseState = structuredClone(remote); conflictSnapshot = null; dirty = true;
-  document.querySelector('#conflict-panel').hidden = true; saveLocal(); render(); void refreshCloud();
-});
-document.querySelector('#export-budget').addEventListener('click', () => {
-  const url = URL.createObjectURL(new Blob([JSON.stringify({ state, base: baseState, dirty }, null, 2)], { type: 'application/json' }));
-  const link = document.createElement('a'); link.href = url; link.download = `budget-backup-${todayISO}.json`; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 setLocked(true);
 refreshDate();

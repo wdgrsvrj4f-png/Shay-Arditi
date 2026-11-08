@@ -6,5 +6,5 @@ try {
   ]);
   if (root) root.innerHTML = parts.join('');
 } catch (_) {}
-await import('/app.js?v=no-telegram-ui');
+await import('/app.js?v=simple-screen');
 await import('/fixes.js?v=2');
