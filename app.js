@@ -1,3 +1,5 @@
+import { mergeChanges, migrateLegacyPending } from './shared/sync.js';
+import { commitmentAmount, cardGroups } from './shared/budget.js';
 const API = '/api/budget';
 const STORAGE_KEY = 'simple-budget-v2';
 const PENDING_SYNC_KEY = 'simple-budget-pending-sync-v1';
@@ -11,8 +13,12 @@ const CATEGORIES = {
   other: 'אחר',
 };
 const METHODS = { debit: 'דיירקט', credit: 'אשראי', cash: 'מזומן', bank: 'העברה בנקאית' };
-const today = new Date();
-const todayISO = toISODate(today);
+function currentDate() {
+  const value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return new Date(`${value}T12:00:00`);
+}
+let today = currentDate();
+let todayISO = toISODate(today);
 
 function toISODate(date) {
   const year = date.getFullYear();
@@ -116,143 +122,142 @@ function hasData(state) {
     || Number(state.settings?.creditPaymentDay) !== 15;
 }
 
-function mergeList(primary, secondary) {
-  const items = new Map();
-  for (const item of [...(primary || []), ...(secondary || [])]) items.set(item.id, item);
-  return [...items.values()];
-}
-
-function mergeStates(remote, local) {
-  const merged = {
-    ...remote,
-    ...local,
-    settings: hasData(local) ? local.settings : remote.settings,
-    obligations: mergeList(remote.obligations, local.obligations),
-    debts: mergeList(remote.debts, local.debts),
-    deletedObligationIds: [...new Set([...(remote.deletedObligationIds || []), ...(local.deletedObligationIds || [])])].slice(-5_000),
-    deletedDebtIds: [...new Set([...(remote.deletedDebtIds || []), ...(local.deletedDebtIds || [])])].slice(-5_000),
-    transactions: mergeList(remote.transactions, local.transactions),
-    deletedTransactionIds: [...new Set([...(remote.deletedTransactionIds || []), ...(local.deletedTransactionIds || [])])].slice(-5_000),
-    creditPayments: mergeList(remote.creditPayments, local.creditPayments),
-    surplusActions: mergeList(remote.surplusActions, local.surplusActions),
-    processedTelegramUpdates: [...new Set([...(remote.processedTelegramUpdates || []), ...(local.processedTelegramUpdates || [])])].slice(-500),
-    telegramChatId: remote.telegramChatId || local.telegramChatId || null,
-  };
-  const deleted = new Set(merged.deletedTransactionIds);
-  merged.transactions = merged.transactions.filter(item => !deleted.has(item.id));
-  const deletedObligations = new Set(merged.deletedObligationIds);
-  const deletedDebts = new Set(merged.deletedDebtIds);
-  merged.obligations = merged.obligations.filter(item => !deletedObligations.has(item.id));
-  merged.debts = merged.debts.filter(item => !deletedDebts.has(item.id));
-  return normalizeState(merged);
-}
-
-let state = normalizeState(readLocal());
+const SNAPSHOT_KEY = 'simple-budget-sync-v3';
+const RECOVERY_KEY = 'simple-budget-recovery-v3';
+let cached;
+try { cached = JSON.parse(localStorage.getItem(SNAPSHOT_KEY) || 'null'); } catch {}
+let state = normalizeState(cached?.state || readLocal());
+let baseState = cached?.base ? normalizeState(cached.base) : null;
+let dirty = Boolean(cached?.dirty || needsCloudSync());
 let cloudActive = false;
-let cloudSaveQueue = Promise.resolve();
-let cloudRefreshInProgress = false;
-let saveRevision = 0;
+let unlocked = false;
+let syncBusy = false;
+let syncAgain = false;
+let conflictSnapshot = null;
 const startupButtons = ['#add-expense', '#add-income', '#add-cash', '#manage-button', '#manage-button-secondary', '#settings-button', '#add-credit-bill', '#telegram-button'];
-startupButtons.forEach(selector => { document.querySelector(selector).disabled = true; });
-
+function setLocked(locked) {
+  unlocked = !locked;
+  document.querySelector('#budget-app').hidden = locked;
+  document.querySelector('#login-panel').hidden = !locked;
+  startupButtons.forEach(selector => { document.querySelector(selector).disabled = locked; });
+}
 function readLocal() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || localStorage.getItem('simple-budget-v1') || 'null'); }
   catch { return null; }
 }
-
 function saveLocal() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+  try {
+    // State, merge base, and pending flag are one atomic localStorage write.
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ state, base: baseState, dirty }));
+    localStorage.removeItem(PENDING_SYNC_KEY);
+    return true;
+  } catch {
+    setStatus('אין מקום לשמירה במכשיר; השאר את הדף פתוח עד לסנכרון');
+    return false;
+  }
 }
-
 function needsCloudSync() {
   try { return localStorage.getItem(PENDING_SYNC_KEY) === '1'; } catch { return false; }
 }
-
-function markCloudSyncPending(pending) {
-  try {
-    if (pending) localStorage.setItem(PENDING_SYNC_KEY, '1');
-    else localStorage.removeItem(PENDING_SYNC_KEY);
-  } catch {}
+function setStatus(message) { document.querySelector('#sync-status').textContent = message; }
+function backupLocal() {
+  try { localStorage.setItem(RECOVERY_KEY, JSON.stringify({ state, base: baseState, savedAt: new Date().toISOString() })); return true; }
+  catch { return false; }
 }
-
-function setStatus(message) {
-  document.querySelector('#sync-status').textContent = message;
-}
-
 function saveState() {
+  dirty = true;
   saveLocal();
-  if (!cloudActive) {
-    markCloudSyncPending(true);
-    setStatus('השינוי נשמר במכשיר הזה; הענן עדיין לא מחובר');
-    return Promise.resolve();
-  }
-  markCloudSyncPending(true);
-  const revision = ++saveRevision;
-  cloudSaveQueue = cloudSaveQueue.catch(() => {}).then(async () => {
-    setStatus('מסנכרן לענן…');
-    try {
-      const latestResponse = await fetch(API, { cache: 'no-store' });
-      if (latestResponse.ok) state = mergeStates(normalizeState(await latestResponse.json()), state);
-      saveLocal();
-      const response = await fetch(API, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state),
-      });
-      if (!response.ok) throw new Error('sync failed');
-      if (revision === saveRevision) markCloudSyncPending(false);
-      setStatus('מסונכרן לענן');
-    } catch {
-      setStatus('הסנכרון נכשל; השינוי נשמר במכשיר הזה');
-    }
-  });
-  return cloudSaveQueue;
+  if (!unlocked) return Promise.resolve();
+  return refreshCloud();
 }
-
+function showConflict(remote) {
+  conflictSnapshot = remote;
+  document.querySelector('#conflict-panel').hidden = false;
+  setStatus('אותו פרט שונה בשני מכשירים. בחר איזו גרסה לשמור.');
+}
+async function apiFetch(url, options = {}) {
+  const response = await fetch(url, { ...options, cache: 'no-store', credentials: 'same-origin' });
+  if (response.status === 401) {
+    cloudActive = false;
+    document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+    setLocked(true);
+    document.querySelector('#login-result').textContent = 'התחבר שוב כדי להמשיך. שינויים ממתינים נשמרו במכשיר.';
+    throw new Error('נדרשת כניסה מחדש');
+  }
+  return response;
+}
 async function refreshCloud() {
-  if (!cloudActive || cloudRefreshInProgress) return;
-  cloudRefreshInProgress = true;
+  if (!unlocked || conflictSnapshot) return;
+  if (syncBusy) { syncAgain = true; return; }
+  syncBusy = true;
   try {
-    await cloudSaveQueue;
-    const response = await fetch(API, { cache: 'no-store' });
-    if (!response.ok) throw new Error('cloud unavailable');
-    state = mergeStates(normalizeState(await response.json()), state);
-    saveLocal();
-    render();
-    setStatus('מסונכרן לענן');
-    if (needsCloudSync()) await saveState();
-  } catch {
-    setStatus('הענן לא זמין כרגע; נשמר המידע האחרון מהמכשיר הזה');
-  } finally {
-    cloudRefreshInProgress = false;
-  }
+    for (let attempt = 0; attempt < 6; attempt++) {
+      syncAgain = false;
+      const response = await apiFetch(API);
+      if (!response.ok) throw new Error('הענן לא זמין כרגע; השינויים ממתינים במכשיר');
+      const revision = response.headers.get('etag');
+      if (!revision) throw new Error('גרסת השרת אינה תואמת. יש לרענן אחרי העדכון.');
+      const raw = await response.json();
+      const remote = normalizeState(raw);
+      cloudActive = true;
+      if (!baseState && !dirty && hasData(state) && raw?.version !== 2 && !hasData(remote)) dirty = true;
+      if (!dirty) {
+        state = remote; baseState = structuredClone(remote); saveLocal(); render();
+        setStatus('מסונכרן לענן · גישה מוגנת');
+        return;
+      }
+      const merged = baseState ? mergeChanges(baseState, state, remote) : migrateLegacyPending(state, remote);
+      if (merged.conflicts.length) { showConflict(remote); return; }
+      state = normalizeState(merged.state);
+      baseState = structuredClone(remote);
+      if (JSON.stringify(state) === JSON.stringify(remote)) { dirty = false; saveLocal(); render(); setStatus('מסונכרן לענן · גישה מוגנת'); return; }
+      saveLocal(); render();
+      const submitted = structuredClone(state);
+      setStatus('מסנכרן לענן…');
+      const saved = await apiFetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': revision }, body: JSON.stringify(submitted) });
+      if (saved.status === 409) continue;
+      if (!saved.ok) throw new Error(saved.status === 413 ? 'התקציב גדול מדי לשמירה; הורד גיבוי לפני המשך' : 'השמירה בענן נכשלה; השינויים נשמרו במכשיר');
+      const acknowledged = normalizeState(await saved.json());
+      // Preserve edits made while the request was in flight.
+      const next = mergeChanges(submitted, state, acknowledged);
+      if (next.conflicts.length) { baseState = submitted; showConflict(acknowledged); return; }
+      baseState = structuredClone(acknowledged);
+      state = normalizeState(next.state);
+      dirty = JSON.stringify(state) !== JSON.stringify(acknowledged);
+      saveLocal(); render();
+      if (!dirty && !syncAgain) { setStatus('מסונכרן לענן · גישה מוגנת'); return; }
+    }
+    setStatus('התקציב משתנה במכשיר נוסף; השינויים ממתינים. לחץ על ניסיון סנכרון.');
+  } catch (error) {
+    cloudActive = false;
+    setStatus(error.message);
+  } finally { syncBusy = false; }
 }
-
 async function connectCloud() {
   try {
-    const response = await fetch(API, { cache: 'no-store' });
-    if (!response.ok) throw new Error('cloud unavailable');
-    const remoteData = await response.json();
-    const remote = normalizeState(remoteData);
-    const local = state;
-    const cloudHasSnapshot = remoteData?.version === 2 || hasData(remote);
-    state = cloudHasSnapshot && !needsCloudSync() ? remote : mergeStates(remote, local);
-    cloudActive = true;
-    saveLocal();
-    render();
-    if (needsCloudSync() || (hasData(local) && !cloudHasSnapshot)) await saveState();
-    else setStatus('מסונכרן לענן · האתר והנתונים פתוחים למי שיש לו את הקישור');
-  } catch {
-    cloudActive = false;
-    setStatus('הענן לא זמין כרגע; אפשר להמשיך והמכשיר ישמור מקומית');
-  } finally {
-    startupButtons.forEach(selector => { document.querySelector(selector).disabled = false; });
-  }
+    const response = await fetch('/api/session', { cache: 'no-store', credentials: 'same-origin' });
+    if (response.status === 503) {
+      document.querySelector('#login-result').textContent = 'נדרשת הגדרת קוד כניסה בשרת לפני שאפשר לפתוח את התקציב.';
+      return;
+    }
+    if (!response.ok) throw new Error();
+    const session = await response.json();
+    setLocked(!session.authenticated);
+    if (session.authenticated) { render(); await refreshCloud(); }
+  } catch { document.querySelector('#login-result').textContent = 'לא ניתן להתחבר כרגע. נסה שוב כשהחיבור חוזר.'; }
 }
-
-window.addEventListener('focus', refreshCloud);
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) void refreshCloud();
+function refreshDate() {
+  today = currentDate(); todayISO = toISODate(today);
+  document.querySelector('#today-label').textContent = new Intl.DateTimeFormat('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }).format(today);
+  if (unlocked) render();
+}
+window.addEventListener('focus', () => { refreshDate(); void refreshCloud(); });
+window.addEventListener('online', () => { void refreshCloud(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshDate(); void refreshCloud(); } });
+// Prevent a stale tab on the same device overwriting an unacknowledged edit.
+window.addEventListener('storage', event => {
+  if (event.key !== SNAPSHOT_KEY || !event.newValue || syncBusy || dirty) return;
+  try { const value = JSON.parse(event.newValue); state = normalizeState(value.state); baseState = value.base; dirty = value.dirty; if (unlocked) render(); } catch {}
 });
 
 function cycleRange(date = today) {
@@ -293,7 +298,8 @@ function creditDueDate(purchaseDate) {
 }
 
 function money(amount) {
-  return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(Number(amount) || 0);
+  if (!Number.isFinite(Number(amount))) return '—';
+  return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(Number(amount));
 }
 
 function dateLabel(value, options = { day: 'numeric', month: 'short' }) {
@@ -313,32 +319,14 @@ function getPendingCommitments(range = cycleRange()) {
   const paid = getPaidTemplateIds(range);
   return [
     ...state.obligations.map(item => ({ ...item, kind: 'fixed' })),
-    ...state.debts.filter(item => Number(item.monthlyPayment) > 0).map(item => ({ ...item, kind: 'debt' })),
+    ...state.debts.filter(item => Number(item.monthlyPayment) > 0 && Number(item.balance) > 0).map(item => ({ ...item, kind: 'debt' })),
   ].filter(item => !paid.has(item.id)).map(item => ({
     ...item,
     dueDate: toISODate(dueDateForDay(item.dueDay, range)),
   })).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
-function getCardGroups() {
-  const settledIds = new Set(state.creditPayments.flatMap(item => item.expenseIds || []));
-  const groups = new Map();
-  for (const item of state.transactions) {
-    if (item.type !== 'expense' || item.method !== 'credit' || !item.creditDueDate || settledIds.has(item.id)) continue;
-    const group = groups.get(item.creditDueDate) || { dueDate: item.creditDueDate, amount: 0, expenseIds: [], manual: false };
-    group.amount += Number(item.amount) || 0;
-    group.expenseIds.push(item.id);
-    groups.set(item.creditDueDate, group);
-  }
-  for (const payment of state.creditPayments.filter(item => item.status === 'pending')) {
-    const group = groups.get(payment.dueDate) || { dueDate: payment.dueDate, amount: 0, expenseIds: [], manual: false };
-    group.amount = Number(payment.amount) || group.amount;
-    group.manual = true;
-    group.paymentId = payment.id;
-    groups.set(payment.dueDate, group);
-  }
-  return [...groups.values()].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-}
+function getCardGroups() { return cardGroups(state); }
 
 function bankBalance(asOf = todayISO) {
   const openingDate = state.settings.openingDate || todayISO;
@@ -379,7 +367,7 @@ function render() {
   const pendingCards = getCardGroups();
   const bankNow = bankBalance();
   const cashNow = cashBalance();
-  const bankCommitments = pending.filter(item => item.kind === 'debt' || item.method !== 'cash').reduce((sum, item) => sum + Number(item.amount), 0);
+  const bankCommitments = pending.filter(item => item.kind === 'debt' || item.method !== 'cash').reduce((sum, item) => sum + commitmentAmount(item), 0);
   const cashCommitments = pending.filter(item => item.kind === 'fixed' && item.method === 'cash').reduce((sum, item) => sum + Number(item.amount), 0);
   const cardCommitments = pendingCards.reduce((sum, item) => sum + Number(item.amount), 0)
     + state.creditPayments.filter(item => item.status === 'paid' && item.paidDate > todayISO).reduce((sum, item) => sum + Number(item.amount), 0);
@@ -461,7 +449,7 @@ function renderCards(groups) {
     row.querySelector('strong').textContent = group.manual ? 'חיוב אשראי שהוזן' : 'חיוב אשראי משוער';
     row.querySelector('small').textContent = `צפוי ב־${dateLabel(group.dueDate)}`;
     row.querySelector('b').textContent = money(group.amount);
-    row.querySelector('button').textContent = group.manual ? 'סמן כשולם' : 'עדכן / סמן כשולם';
+    row.querySelector('button').textContent = 'עדכן / סמן כשולם';
     row.querySelector('button').addEventListener('click', () => openCreditPayment(group));
     holder.append(row);
   }
@@ -524,6 +512,7 @@ function openDebtPayment(item, range) {
   form.dataset.cycleKey = range.key;
   form.querySelector('[name="amount"]').value = item.monthlyPayment;
   form.querySelector('[name="principal"]').value = '';
+  form.querySelector('[name="principal"]').max = item.monthlyPayment;
   form.querySelector('[name="date"]').value = todayISO;
   document.querySelector('#debt-payment-title').textContent = `החזר: ${item.name}`;
   document.querySelector('#debt-payment-dialog').showModal();
@@ -532,15 +521,26 @@ function openDebtPayment(item, range) {
 function openCreditPayment(group) {
   const form = document.querySelector('#credit-payment-form');
   form.dataset.dueDate = group.dueDate;
-  form.dataset.manualId = group.paymentId || '';
+  form.dataset.paymentIds = JSON.stringify(group.paymentIds || []);
   form.dataset.expenseIds = JSON.stringify(group.expenseIds || []);
   form.querySelector('[name="amount"]').value = Math.round(group.amount * 100) / 100;
   form.querySelector('[name="paidDate"]').value = todayISO;
+  form.elements.status.value = 'paid';
+  form.elements.paidDate.disabled = false;
+  form.elements.paidDate.required = true;
   document.querySelector('#credit-payment-dialog').showModal();
 }
 
 function deleteTransaction(id) {
-  if (!confirm('למחוק את התנועה הזאת?')) return;
+  const removed = state.transactions.find(item => item.id === id);
+  const message = removed?.type === 'debt_payment' && removed.principal === undefined
+    ? 'בתשלום ישן זה לא נשמר חלק הקרן. מחיקתו לא תשחזר את יתרת החוב; יהיה צורך לעדכן אותה בנפרד. למחוק?'
+    : 'למחוק את התנועה הזאת?';
+  if (!confirm(message)) return;
+  if (removed?.type === 'debt_payment' && Number(removed.principal) > 0) {
+    const debt = state.debts.find(item => item.id === removed.debtId);
+    if (debt) debt.balance = Number(debt.balance) + Number(removed.principal);
+  }
   state.transactions = state.transactions.filter(item => item.id !== id);
   state.deletedTransactionIds = [...new Set([...(state.deletedTransactionIds || []), id])].slice(-5_000);
   void saveState();
@@ -641,9 +641,10 @@ document.querySelector('#debt-payment-form').addEventListener('submit', event =>
   if (!debt) return;
   const amount = Number(data.get('amount'));
   const principal = Number(data.get('principal')) || 0;
+  if (principal > amount || principal > Number(debt.balance)) { alert('חלק הקרן לא יכול להיות גדול מהתשלום או מיתרת החוב.'); return; }
   state.transactions.push({
     id: makeId(), type: 'debt_payment', name: debt.name, amount,
-    method: 'bank', date: String(data.get('date')), debtId: debt.id,
+    method: 'bank', date: String(data.get('date')), debtId: debt.id, principal,
     obligationId: debt.id, obligationCycleKey: form.dataset.cycleKey,
   });
   if (principal > 0) debt.balance = Math.max(0, Number(debt.balance) - principal);
@@ -651,23 +652,24 @@ document.querySelector('#debt-payment-form').addEventListener('submit', event =>
   document.querySelector('#debt-payment-dialog').close();
 });
 
+document.querySelector('#credit-payment-form').elements.status.addEventListener('change', event => {
+  const form = document.querySelector('#credit-payment-form');
+  form.elements.paidDate.disabled = event.target.value !== 'paid';
+  form.elements.paidDate.required = event.target.value === 'paid';
+});
+
 document.querySelector('#credit-payment-form').addEventListener('submit', event => {
   event.preventDefault();
   const form = event.currentTarget;
   const data = new FormData(form);
-  const manual = state.creditPayments.find(item => item.id === form.dataset.manualId);
-  if (manual) {
-    manual.status = 'paid';
-    manual.amount = Number(data.get('amount'));
-    manual.paidDate = String(data.get('paidDate'));
-    manual.expenseIds = JSON.parse(form.dataset.expenseIds || '[]');
-  } else {
-    state.creditPayments.push({
-      id: makeId(), dueDate: form.dataset.dueDate, amount: Number(data.get('amount')),
-      paidDate: String(data.get('paidDate')), status: 'paid',
-      expenseIds: JSON.parse(form.dataset.expenseIds || '[]'),
-    });
-  }
+  const paymentIds = JSON.parse(form.dataset.paymentIds || '[]');
+  state.creditPayments = state.creditPayments.filter(item => !paymentIds.includes(item.id));
+  state.creditPayments.push({
+    id: makeId(), dueDate: form.dataset.dueDate, amount: Number(data.get('amount')),
+    paidDate: data.get('status') === 'paid' ? String(data.get('paidDate')) : '', status: String(data.get('status')),
+    expenseIds: data.get('status') === 'paid' ? JSON.parse(form.dataset.expenseIds || '[]') : [],
+    amountMode: 'statement', coveredExpenseIds: JSON.parse(form.dataset.expenseIds || '[]'),
+  });
   void saveState(); render();
   document.querySelector('#credit-payment-dialog').close();
 });
@@ -675,9 +677,16 @@ document.querySelector('#credit-payment-form').addEventListener('submit', event 
 document.querySelector('#manual-credit-form').addEventListener('submit', event => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
+  const dueDate = String(data.get('dueDate'));
+  const amountMode = String(data.get('amountMode') || 'remainder');
+  const pending = state.creditPayments.filter(item => item.status === 'pending' && item.dueDate === dueDate);
+  if (pending.length && (amountMode === 'statement' || pending.some(item => item.amountMode === 'statement'))) {
+    alert('כבר קיים חיוב למועד הזה. כדי לעדכן את הסכום הכולל, השתמש בעדכון החשבון הקיים.'); return;
+  }
+  const coveredExpenseIds = amountMode === 'statement' ? getCardGroups().find(group => group.dueDate === dueDate)?.expenseIds || [] : [];
   state.creditPayments.push({
-    id: makeId(), dueDate: String(data.get('dueDate')), amount: Number(data.get('amount')),
-    paidDate: '', status: 'pending', expenseIds: [], manual: true,
+    id: makeId(), dueDate, amount: Number(data.get('amount')),
+    paidDate: '', status: 'pending', expenseIds: [], manual: true, amountMode, coveredExpenseIds,
   });
   void saveState(); render();
   event.currentTarget.reset();
@@ -745,7 +754,7 @@ document.querySelector('#telegram-setup-form').addEventListener('submit', async 
   button.disabled = true;
   result.textContent = 'מחבר את הבוט…';
   try {
-    const response = await fetch('/api/telegram/setup', {
+    const response = await apiFetch('/api/telegram/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: String(new FormData(form).get('code')) }),
@@ -769,6 +778,48 @@ document.querySelectorAll('[data-open-fixed]').forEach(button => button.addEvent
 document.querySelectorAll('[data-open-debt]').forEach(button => button.addEventListener('click', () => document.querySelector('#debt-dialog').showModal()));
 document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => button.closest('dialog').close()));
 
-document.querySelector('#today-label').textContent = new Intl.DateTimeFormat('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }).format(today);
-render();
+document.querySelector('#login-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button'); button.disabled = true;
+  const result = document.querySelector('#login-result');
+  try {
+    const response = await fetch('/api/session', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: form.elements.key.value }) });
+    if (!response.ok) throw new Error(response.status === 503 ? 'נדרשת הגדרת קוד כניסה בשרת.' : 'קוד הכניסה שגוי.');
+    form.reset(); result.textContent = ''; setLocked(false); render(); await refreshCloud();
+  } catch (error) { result.textContent = error.message || 'החיבור נכשל.'; }
+  finally { button.disabled = false; }
+});
+document.querySelector('#logout-button').addEventListener('click', async () => {
+  if (dirty && !confirm('יש שינויים שעדיין לא סונכרנו. הם יישמרו במכשיר לכניסה הבאה. לצאת?')) return;
+  const response = await fetch('/api/session', { method: 'DELETE', credentials: 'same-origin' }).catch(() => null);
+  if (!response?.ok) { setStatus('היציאה נכשלה. נסה שוב כשהחיבור חוזר.'); return; }
+  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+  cloudActive = false; setLocked(true);
+});
+document.querySelector('#retry-sync').addEventListener('click', () => { void refreshCloud(); });
+document.querySelector('#conflict-local').addEventListener('click', () => {
+  if (!conflictSnapshot) return;
+  if (!backupLocal()) { setStatus('לא ניתן לשמור גיבוי מקומי. הורד גיבוי לפני בחירת גרסה.'); return; }
+  const remote = conflictSnapshot;
+  state = normalizeState(mergeChanges(baseState || { ...remote, settings: {}, obligations: [], debts: [], transactions: [], creditPayments: [], surplusActions: [] }, state, remote, { preferLocal: true }).state);
+  baseState = structuredClone(remote); conflictSnapshot = null; dirty = true;
+  document.querySelector('#conflict-panel').hidden = true; saveLocal(); render(); void refreshCloud();
+});
+document.querySelector('#conflict-cloud').addEventListener('click', () => {
+  if (!conflictSnapshot) return;
+  if (!backupLocal()) { setStatus('לא ניתן לשמור גיבוי מקומי. הורד גיבוי לפני בחירת גרסה.'); return; }
+  const remote = conflictSnapshot;
+  // Keep unrelated local edits; only conflicting fields use the cloud value.
+  state = normalizeState(baseState ? mergeChanges(baseState, state, remote).state : migrateLegacyPending(state, remote).state);
+  baseState = structuredClone(remote); conflictSnapshot = null; dirty = true;
+  document.querySelector('#conflict-panel').hidden = true; saveLocal(); render(); void refreshCloud();
+});
+document.querySelector('#export-budget').addEventListener('click', () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ state, base: baseState, dirty }, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = `budget-backup-${todayISO}.json`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+setLocked(true);
+refreshDate();
 void connectCloud();
