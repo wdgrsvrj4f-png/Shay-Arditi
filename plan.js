@@ -1,5 +1,5 @@
 import { INCOME, KEPT, LOCKED, classifyExpense, money, planWindow } from '/shared/plan.js';
-import { FUND_IDS, MOVEABLE_IDS, TARGET_IDS, monthView, proposedClose, balancesFromDeposits, fundingStatus, canTransfer, canUseFund, closingAllowed, dayPace, makeEntry } from '/shared/plan-ledger.js';
+import { FUND_IDS, MOVEABLE_IDS, TARGET_IDS, monthView, proposedClose, balancesFromDeposits, fundingStatus, canTransfer, canUseFund, closingAllowed, makeEntry } from '/shared/plan-ledger.js';
 import { cardGroups } from '/shared/budget.js';
 
 const e = value => String(value ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -75,20 +75,18 @@ function render(){
   const opened=new Set([...document.querySelectorAll('#app details[open]')].map(node=>node.id||node.querySelector('form')?.id).filter(Boolean));
   const [year,month]=chosenMonth.split('-').map(Number);
   const view=monthView(snapshot,year,month), funds=balancesFromDeposits(snapshot);
-  const pace=dayPace(view.safeFreeLeft,(today()>view.window.start?today():view.window.start),view.window.end);
   const full=view.lockedSum+view.keptSum+view.freeBudget;
-  document.querySelector('#month-select').value=chosenMonth;
+  const [displayYear,displayMonth]=chosenMonth.split('-').map(Number);
+  document.querySelector('#month-display').textContent=new Intl.DateTimeFormat('he-IL',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(displayYear,displayMonth-1,1)));
+  document.querySelector('#month-prev').disabled=chosenMonth<='2026-11';
   document.querySelector('#banner').innerHTML=new Date(today()+'T12:00:00').getDay()===0?'<div class="banner">יום ראשון: כדאי לעשות התאמה שבועית של העסקאות והחיובים.</div>':'';
   document.querySelector('#hero').innerHTML='<div class="kicker">כמה באמת פנוי לי?</div><div class="amount '+(view.safeFreeLeft<0?'bad':'')+'">'+cur(view.safeFreeLeft)+'</div><div class="sub">מתוך '+cur(view.freeBudget)+' חופשי, במסגרת חודשית של '+cur(INCOME)+'. '+(view.closed?'החודש נסגר.':'')+'</div>'+
   '<div class="bar"><i style="width:'+(view.lockedSum/full*100)+'%;background:#8b93a1"></i><i style="width:'+(view.keptSum/full*100)+'%;background:#e4b56a"></i><i style="width:'+(view.freeBudget/full*100)+'%;background:#8dcea8"></i></div>'+
   '<div class="legend"><span>מחויב '+cur(view.lockedSum)+'</span><span>לשמור '+cur(view.keptSum)+'</span><span>חופשי '+cur(view.freeBudget)+'</span></div>'+
-  '<div class="stats"><div class="stat"><small>קצב ליום</small><strong>'+cur(pace.daily)+'</strong></div><div class="stat"><small>ל־7 ימים</small><strong>'+cur(pace.weekly)+'</strong></div><div class="stat"><small>רזרבה בפיקדון</small><strong>'+cur(funds.balances.reserve)+'</strong></div></div>'+
+  '<div class="reserve-line"><span>רזרבה בפיקדון</span><strong>'+cur(funds.balances.reserve)+'</strong></div>'+
   (!view.funding.found?'<p class="note">הכנסה שמממנת את החודש עדיין לא אומתה. יש לבדוק בתזרים.</p>':'')+
   (view.over.length?'<p class="note bad">יש חריגה של '+cur(view.deficits)+' בקטגוריות. הסכום כבר הופחת מהכסף הפנוי הבטוח; העבר תקציב כדי לאזן.</p>':'')+
   '<p class="note">המספר הוא מסגרת תכנון. יש לוודא בנפרד כיסוי לחיובי אשראי, להלוואות ולטסט הקרוב.</p>';
-  document.querySelector('#ask').innerHTML='<h2>אפשר להרשות לעצמי?</h2><label for="wish">כמה אני רוצה להוציא?</label><input id="wish" inputmode="decimal" type="number" min="0" value="120"><div id="answer"></div>';
-  document.querySelector('#wish').addEventListener('input',evt=>{const cost=Math.max(0,Number(evt.target.value)||0),left=money(view.safeFreeLeft-cost),newPace=dayPace(left,(today()>view.window.start?today():view.window.start),view.window.end);document.querySelector('#answer').innerHTML='<div class="check"><div class="row"><span>יישאר אחרי ההוצאה</span><strong class="'+(left<0?'bad':'')+'">'+cur(left)+'</strong></div><div class="meta">ממוצע חדש ליום: '+cur(newPace.daily)+'. '+(left<0?'חורג מהתקציב.':'הסכום נכנס למסגרת, אם יתר הקטגוריות מכוסות.')+'</div></div>';});
-  document.querySelector('#wish').dispatchEvent(new Event('input'));
   document.querySelector('#kept').innerHTML=view.lines.filter(x=>KEPT.some(item=>item.id===x.id)).map(x=>boxLine(x,funds.balances)).join('');
   document.querySelector('#locked').innerHTML=view.lines.filter(x=>LOCKED.some(item=>item.id===x.id)).map(x=>boxLine(x,funds.balances)).join('');
   document.querySelector('#rows').innerHTML=view.rows.length?view.rows.map(item=>'<div class="buy"><div><strong>'+e(item.name)+'</strong><div class="meta">'+e(item.date)+' · '+cur(item.amount)+' · '+e(item.method||'')+(item.fundPaid?' · שולם מקרן':'')+'</div></div><select data-id="'+e(item.id)+'" '+(view.closed?'disabled':'')+'>'+selectOptions(['free',...KEPT.map(x=>x.id),...LOCKED.map(x=>x.id)],item.plan)+'</select></div>').join(''):'<p class="note">עדיין לא נרשמו הוצאות לחודש הזה.</p>';
@@ -198,7 +196,16 @@ function renderCashflow(){
     });
   });
 }
-document.querySelector('#month-select').addEventListener('change',ev=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(ev.target.value)){chosenMonth=ev.target.value;if(snapshot)render();}});
+function shiftBudgetMonth(delta) {
+  const [year,month]=chosenMonth.split('-').map(Number);
+  const date=new Date(Date.UTC(year,month-1+delta,1));
+  const value=date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0');
+  if(value<'2026-11'||value>'2099-12')return;
+  chosenMonth=value;
+  if(snapshot)render();
+}
+document.querySelector('#month-prev').addEventListener('click',()=>shiftBudgetMonth(-1));
+document.querySelector('#month-next').addEventListener('click',()=>shiftBudgetMonth(1));
 login.addEventListener('submit',async ev=>{ev.preventDefault();try{const r=await fetch('/api/session',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:new FormData(login).get('key')})});document.querySelector('#login-error').textContent=r.ok?'':'קוד הכניסה לא מתאים';if(r.ok)await load();}catch{document.querySelector('#login-error').textContent='לא ניתן להתחבר';}});
 load();
 
