@@ -49,18 +49,29 @@
       .rules{color:#c5cad3;font-size:14px}
       .rules li{margin:6px 0}
       .bad{color:var(--red)}
+      .duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+      .action{margin-top:12px;width:100%;height:46px;border:0;border-radius:12px;background:#8dcea8;color:#0e2219;font-weight:700}
+      .action:disabled{opacity:.45;cursor:not-allowed}
+      .card form{margin:8px 0 18px}.card form label{margin-top:11px}.card details{border-top:1px solid var(--line);padding:13px 0}.card summary{cursor:pointer;font-weight:600}
+      .card hr{border:0;border-top:1px solid var(--line);margin:17px 0}.ok-note{color:var(--green)}.backlink{display:block;text-align:center;padding:10px;border:1px solid var(--line);border-radius:12px;margin-top:8px;text-decoration:none}
+      #status{padding:10px;color:#e4b56a;font-size:12px}
+      @media(max-width:560px){.duo{grid-template-columns:1fr}}
       @media(max-width:560px){.amount{font-size:46px}.stats{grid-template-columns:1fr}.buy{grid-template-columns:1fr}}
     </style>
   </head>
   <body>
     <main class="wrap" id="app" hidden>
-      <div class="top"><h1>התוכנית</h1><a href="/">התזרים</a></div>
-      <div id="banner"></div>
+      <div class="top"><h1>התוכנית שלי</h1><div><label for="month-select">חודש התקציב</label><input type="month" id="month-select" style="max-width:180px"></div><a href="/">התזרים</a></div>
+      <div id="banner"></div><div id="status" hidden role="status" aria-live="polite"></div>
       <section class="hero" id="hero"></section>
       <section class="card" id="ask"></section>
       <section class="card"><h2>כסף שחייבים לשמור</h2><div id="kept"></div></section>
       <section class="card"><h2>כסף שכבר מחויב</h2><div id="locked"></div><p class="note">החיוב בבנק לא נספר שוב. קונים פעם אחת, ביום הקנייה.</p></section>
+      <section class="card" id="actions"></section>
       <section class="card"><h2>מה נרשם החודש</h2><div id="rows"></div></section>
+      <section class="card" id="funds"></section>
+      <section class="card" id="closing"></section>
+      <section class="card" id="control"></section>
       <section class="card rules">
         <h2>איך מתנהלים</h2>
         <ol>
@@ -79,6 +90,6 @@
       <button type="submit">כניסה</button>
       <p class="note" id="login-error"></p>
     </form>
-    <script type="module" src="/plan.js?v=1"></script>
+    <script type="module" src="/plan.js?v=2"></script>
   </body>
 </html>
