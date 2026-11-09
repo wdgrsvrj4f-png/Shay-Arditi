@@ -95,7 +95,7 @@ function validate(value) {
   for (const item of value.planEvents) {
     if (!item || !validId(item.id) || !validDate(item.date) || !validName(item.kind)) return null;
     if (item.kind === 'transfer') {
-      if (!moveable.has(item.from) || !moveable.has(item.to) || item.from === item.to || !validAmount(item.amount)) return null;
+      if (!moveable.has(item.from) || !planIds.has(item.to) || item.from === item.to || !validAmount(item.amount)) return null;
     } else if (item.kind === 'fundUse') {
       if (!fundIds.has(item.fundId) || !validAmount(item.amount) || !validId(item.expenseId)) return null;
       const expense = value.transactions.find(tx => tx.id === item.expenseId && tx.type === 'expense');
