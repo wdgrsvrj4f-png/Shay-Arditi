@@ -9,7 +9,6 @@
   PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "1"
 
 [functions."card-sync-background"]
-  memory = 1024
   external_node_modules = ["@sparticuz/chromium", "israeli-bank-scrapers", "puppeteer", "puppeteer-core"]
   included_files = ["node_modules/@sparticuz/chromium/bin/**"]
 
