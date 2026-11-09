@@ -92,6 +92,7 @@ function validate(value) {
   }
 
   // Budget plan events are additive and preserve the old v2 data format.
+  const reversedFundUses = new Set(value.planEvents.filter(item => item.kind === 'fundUseReversal').map(item => item.fundUseId));
   for (const item of value.planEvents) {
     if (!item || !validId(item.id) || !validDate(item.date) || !validName(item.kind)) return null;
     if (item.kind === 'transfer') {
@@ -99,7 +100,9 @@ function validate(value) {
     } else if (item.kind === 'fundUse') {
       if (!fundIds.has(item.fundId) || !validAmount(item.amount) || !validId(item.expenseId)) return null;
       const expense = value.transactions.find(tx => tx.id === item.expenseId && tx.type === 'expense');
-      if (!expense || Math.abs(Number(expense.amount) - Number(item.amount)) > 0.009) return null;
+      if ((!expense || Math.abs(Number(expense.amount) - Number(item.amount)) > 0.009) && !reversedFundUses.has(item.id)) return null;
+    } else if (item.kind === 'fundUseReversal') {
+      if (!validId(item.fundUseId) || !value.planEvents.some(entry => entry.id === item.fundUseId && entry.kind === 'fundUse')) return null;
     } else if (item.kind === 'fundOpening') {
       if (!fundIds.has(item.fundId) || !validAmount(item.amount)) return null;
     } else if (item.kind === 'fundMove') {
@@ -114,7 +117,8 @@ function validate(value) {
     } else return null;
   }
   if (new Set(value.planEvents.map(item => item.id)).size !== value.planEvents.length) return null;
-  if (value.planEvents.filter(item => item.kind === 'fundUse').some((item, i, arr) => arr.findIndex(x => x.expenseId === item.expenseId) !== i)) return null;
+  if (value.planEvents.filter(item => item.kind === 'fundUse' && !reversedFundUses.has(item.id)).some((item, i, arr) => arr.findIndex(x => x.expenseId === item.expenseId) !== i)) return null;
+  if (value.planEvents.filter(item => item.kind === 'fundUseReversal').some((item, i, arr) => arr.findIndex(x => x.fundUseId === item.fundUseId) !== i)) return null;
   if (value.planEvents.filter(item => item.kind === 'close').some((item, i, arr) => arr.findIndex(x => x.month === item.month) !== i)) return null;
   if (value.planEvents.filter(item => item.kind === 'depositConfirmed').some((item, i, arr) => arr.findIndex(x => x.closeId === item.closeId) !== i)) return null;
   if (value.planEvents.filter(item => item.kind === 'fundOpening').some((item, i, arr) => arr.findIndex(x => x.fundId === item.fundId) !== i)) return null;
