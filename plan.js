@@ -76,7 +76,9 @@ function render(){
   const [year,month]=chosenMonth.split('-').map(Number);
   const view=monthView(snapshot,year,month), funds=balancesFromDeposits(snapshot);
   const full=view.lockedSum+view.keptSum+view.freeBudget;
-  document.querySelector('#month-select').value=chosenMonth;
+  const [displayYear,displayMonth]=chosenMonth.split('-').map(Number);
+  document.querySelector('#month-display').textContent=new Intl.DateTimeFormat('he-IL',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(displayYear,displayMonth-1,1)));
+  document.querySelector('#month-prev').disabled=chosenMonth<='2026-11';
   document.querySelector('#banner').innerHTML=new Date(today()+'T12:00:00').getDay()===0?'<div class="banner">יום ראשון: כדאי לעשות התאמה שבועית של העסקאות והחיובים.</div>':'';
   document.querySelector('#hero').innerHTML='<div class="kicker">כמה באמת פנוי לי?</div><div class="amount '+(view.safeFreeLeft<0?'bad':'')+'">'+cur(view.safeFreeLeft)+'</div><div class="sub">מתוך '+cur(view.freeBudget)+' חופשי, במסגרת חודשית של '+cur(INCOME)+'. '+(view.closed?'החודש נסגר.':'')+'</div>'+
   '<div class="bar"><i style="width:'+(view.lockedSum/full*100)+'%;background:#8b93a1"></i><i style="width:'+(view.keptSum/full*100)+'%;background:#e4b56a"></i><i style="width:'+(view.freeBudget/full*100)+'%;background:#8dcea8"></i></div>'+
@@ -194,7 +196,16 @@ function renderCashflow(){
     });
   });
 }
-document.querySelector('#month-select').addEventListener('change',ev=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(ev.target.value)){chosenMonth=ev.target.value;if(snapshot)render();}});
+function shiftBudgetMonth(delta) {
+  const [year,month]=chosenMonth.split('-').map(Number);
+  const date=new Date(Date.UTC(year,month-1+delta,1));
+  const value=date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0');
+  if(value<'2026-11'||value>'2099-12')return;
+  chosenMonth=value;
+  if(snapshot)render();
+}
+document.querySelector('#month-prev').addEventListener('click',()=>shiftBudgetMonth(-1));
+document.querySelector('#month-next').addEventListener('click',()=>shiftBudgetMonth(1));
 login.addEventListener('submit',async ev=>{ev.preventDefault();try{const r=await fetch('/api/session',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:new FormData(login).get('key')})});document.querySelector('#login-error').textContent=r.ok?'':'קוד הכניסה לא מתאים';if(r.ok)await load();}catch{document.querySelector('#login-error').textContent='לא ניתן להתחבר';}});
 load();
 
