@@ -1,5 +1,5 @@
 import { INCOME, KEPT, LOCKED, classifyExpense, money, planWindow } from '/shared/plan.js';
-import { FUND_IDS, MOVEABLE_IDS, TARGET_IDS, monthView, proposedClose, balancesFromDeposits, fundingStatus, canTransfer, canUseFund, closingAllowed, dayPace, makeEntry } from '/shared/plan-ledger.js';
+import { FUND_IDS, MOVEABLE_IDS, TARGET_IDS, monthView, proposedClose, balancesFromDeposits, fundingStatus, canTransfer, canUseFund, closingAllowed, makeEntry } from '/shared/plan-ledger.js';
 import { cardGroups } from '/shared/budget.js';
 
 const e = value => String(value ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -75,14 +75,13 @@ function render(){
   const opened=new Set([...document.querySelectorAll('#app details[open]')].map(node=>node.id||node.querySelector('form')?.id).filter(Boolean));
   const [year,month]=chosenMonth.split('-').map(Number);
   const view=monthView(snapshot,year,month), funds=balancesFromDeposits(snapshot);
-  const pace=dayPace(view.safeFreeLeft,(today()>view.window.start?today():view.window.start),view.window.end);
   const full=view.lockedSum+view.keptSum+view.freeBudget;
   document.querySelector('#month-select').value=chosenMonth;
   document.querySelector('#banner').innerHTML=new Date(today()+'T12:00:00').getDay()===0?'<div class="banner">יום ראשון: כדאי לעשות התאמה שבועית של העסקאות והחיובים.</div>':'';
   document.querySelector('#hero').innerHTML='<div class="kicker">כמה באמת פנוי לי?</div><div class="amount '+(view.safeFreeLeft<0?'bad':'')+'">'+cur(view.safeFreeLeft)+'</div><div class="sub">מתוך '+cur(view.freeBudget)+' חופשי, במסגרת חודשית של '+cur(INCOME)+'. '+(view.closed?'החודש נסגר.':'')+'</div>'+
   '<div class="bar"><i style="width:'+(view.lockedSum/full*100)+'%;background:#8b93a1"></i><i style="width:'+(view.keptSum/full*100)+'%;background:#e4b56a"></i><i style="width:'+(view.freeBudget/full*100)+'%;background:#8dcea8"></i></div>'+
   '<div class="legend"><span>מחויב '+cur(view.lockedSum)+'</span><span>לשמור '+cur(view.keptSum)+'</span><span>חופשי '+cur(view.freeBudget)+'</span></div>'+
-  '<div class="stats"><div class="stat"><small>קצב ליום</small><strong>'+cur(pace.daily)+'</strong></div><div class="stat"><small>ל־7 ימים</small><strong>'+cur(pace.weekly)+'</strong></div><div class="stat"><small>רזרבה בפיקדון</small><strong>'+cur(funds.balances.reserve)+'</strong></div></div>'+
+  '<div class="reserve-line"><span>רזרבה בפיקדון</span><strong>'+cur(funds.balances.reserve)+'</strong></div>'+
   (!view.funding.found?'<p class="note">הכנסה שמממנת את החודש עדיין לא אומתה. יש לבדוק בתזרים.</p>':'')+
   (view.over.length?'<p class="note bad">יש חריגה של '+cur(view.deficits)+' בקטגוריות. הסכום כבר הופחת מהכסף הפנוי הבטוח; העבר תקציב כדי לאזן.</p>':'')+
   '<p class="note">המספר הוא מסגרת תכנון. יש לוודא בנפרד כיסוי לחיובי אשראי, להלוואות ולטסט הקרוב.</p>';
