@@ -14,6 +14,10 @@ const budget = createBudgetHandler(async () => store);
 const publicFiles = new Map([
   ['/', ['index.html', 'text/html']], ['/index.html', ['index.html', 'text/html']],
   ['/app.js', ['app.js', 'text/javascript']],
+  ['/plan.html', ['plan.html', 'text/html']],
+  ['/plan.js', ['plan.js', 'text/javascript']],
+  ['/shared/plan.js', ['shared/plan.js', 'text/javascript']],
+  ['/shared/plan-ledger.js', ['shared/plan-ledger.js', 'text/javascript']],
   ['/shared/sync.js', ['shared/sync.js', 'text/javascript']],
   ['/shared/budget.js', ['shared/budget.js', 'text/javascript']],
 ]);

@@ -1,6 +1,6 @@
 // A three-way merge applies only edits made since the last acknowledged snapshot.
 // Concurrent edits to the same value require an explicit choice, never last-write-wins.
-const lists = ['obligations', 'debts', 'transactions', 'creditPayments', 'surplusActions'];
+const lists = ['obligations', 'debts', 'transactions', 'creditPayments', 'surplusActions', 'planEvents'];
 const tombstones = { obligations: 'deletedObligationIds', debts: 'deletedDebtIds', transactions: 'deletedTransactionIds' };
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const clone = value => value === undefined ? undefined : structuredClone(value);
@@ -20,6 +20,7 @@ export function mergeChanges(base, local, remote, { preferLocal = false } = {}) 
   const result = clone(remote);
   result.settings = merge(base.settings, local.settings, remote.settings, 'settings');
   for (const key of lists) {
+    if (key === 'planEvents' && ![base, local, remote].some(state => Object.prototype.hasOwnProperty.call(state, key))) continue;
     const b = new Map((base[key] || []).map(v => [v.id, v]));
     const l = new Map((local[key] || []).map(v => [v.id, v]));
     const r = new Map((remote[key] || []).map(v => [v.id, v]));
