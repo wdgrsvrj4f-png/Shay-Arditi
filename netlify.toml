@@ -3,6 +3,19 @@
   command = "npm run build"
   functions = "netlify/functions"
 
+[build.environment]
+  NODE_VERSION = "22"
+  PUPPETEER_SKIP_DOWNLOAD = "1"
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "1"
+
+[functions."card-sync-background"]
+  memory = 1024
+  external_node_modules = ["@sparticuz/chromium", "israeli-bank-scrapers", "puppeteer", "puppeteer-core"]
+  included_files = ["node_modules/@sparticuz/chromium/bin/**"]
+
+[functions."card-schedule"]
+  schedule = "0 3 * * *"
+
 [[redirects]]
   from = "/api/budget"
   to = "/.netlify/functions/budget"
@@ -32,6 +45,16 @@
   for = "/app.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[redirects]]
+  from = "/api/card"
+  to = "/.netlify/functions/card"
+  status = 200
+
+[[redirects]]
+  from = "/api/card/sync"
+  to = "/.netlify/functions/card"
+  status = 200
 
 [[redirects]]
   from = "/api/session"

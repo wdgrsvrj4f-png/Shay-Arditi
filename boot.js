@@ -6,5 +6,5 @@ try {
   ]);
   if (root) root.innerHTML = parts.join('');
 } catch (_) {}
-await import('/app.js?v=status-fixed');
+await import('/app.js?v=card-pull');
 await import('/fixes.js?v=2');

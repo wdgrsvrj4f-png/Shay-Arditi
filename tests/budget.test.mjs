@@ -160,3 +160,47 @@ test('browser finance functions show correct balance with monthly debts and rest
     ({ amount, debt: state.debts[0].balance, balance: bankBalance() });`, context);
   assert.equal(result.amount, 1100); assert.equal(result.debt, 12000); assert.equal(result.balance, 15000);
 });
+
+test('card password is encrypted and a repeat pull does not duplicate transactions', async () => {
+  const { encryptCard, decryptCard, cardTransactionsToBudget } = await import('../netlify/lib/card.js');
+  const { createCardHandler } = await import('../netlify/functions/card.mjs');
+  const { runCardSync } = await import('../netlify/lib/card-run.mjs');
+  const password = 'super-secret-card-password';
+  const store = memoryStore(demoData());
+  const handler = createCardHandler(async () => store, async () => true);
+  assert.equal((await handler(request('/api/card', { authorized: false }))).status, 401);
+  const saved = await handler(request('/api/card', { method: 'PUT', body: { company: 'max', idNumber: '123456782', password } }));
+  assert.equal(saved.status, 200);
+  const stored = JSON.stringify(await store.get('card-login'));
+  assert.equal(stored.includes(password), false);
+  assert.equal(stored.includes('123456782'), false);
+  const login = await store.get('card-login');
+  assert.equal(decryptCard(login.secret, process.env.BUDGET_ACCESS_KEY).password, password);
+  assert.equal((await (await handler(request('/api/card'))).json()).password, undefined);
+  login.secret.tag = 'aaaa';
+  assert.throws(() => decryptCard(login.secret, process.env.BUDGET_ACCESS_KEY));
+  const rows = [{ identifier: 55, date: '2026-11-01', chargedAmount: 80, description: 'סופר' }];
+  const first = await runCardSync(store, { user: true, pull: async () => rows, callTelegram: async () => {} });
+  const second = await runCardSync(store, { user: true, pull: async () => rows, callTelegram: async () => {} });
+  const transactions = (await store.get('shared-budget')).transactions.filter(item => item.id === 'card-max-55');
+  assert.equal(first.added, 1);
+  assert.equal(second.added, 0);
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].method, 'credit');
+  const skipped = cardTransactionsToBudget(rows, { company: 'max', existing: [{ id: 'hand', type: 'expense', method: 'credit', amount: 80, date: '2026-11-01' }], deletedIds: [] });
+  assert.equal(skipped.length, 0);
+});
+
+test('a card code sent to Telegram is stored once and not recorded as an expense', async () => {
+  process.env.TELEGRAM_BOT_TOKEN = 'test-token'; process.env.TELEGRAM_WEBHOOK_SECRET = 'test-webhook'; process.env.TELEGRAM_PAIRING_CODE = 'test-pair';
+  const initial = demoData(); initial.telegramChatId = '123'; const store = memoryStore(initial);
+  await store.setJSON('card-sync', { needsOtp: true, startedAt: Date.now(), status: 'running' });
+  const replies = []; const handler = createTelegramHandler(async () => store, async (token, method, body) => { replies.push(body); return { ok: true }; });
+  const update = { update_id: 90, message: { chat: { id: 123, type: 'private' }, text: '448812' } };
+  const response = await handler(request('/api/telegram', { method: 'POST', body: update, authorized: false, headers: { 'x-telegram-bot-api-secret-token': 'test-webhook' } }));
+  assert.equal(response.status, 200);
+  assert.equal((await store.get('card-otp')).code, '448812');
+  assert.equal((await store.get('shared-budget')).transactions.some(item => item.id === 'telegram-90'), false);
+  assert.equal(replies[0].text.includes('448812'), false);
+});
+

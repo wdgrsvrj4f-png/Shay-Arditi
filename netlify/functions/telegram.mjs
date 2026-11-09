@@ -204,6 +204,28 @@ return async function handler(request) {
 
   if (chatId !== String(state.telegramChatId)) return reply({ ok: true });
 
+  if (/^\d{4,8}$/.test(text) && typeof store.get === "function") {
+    const sync = await store.get("card-sync", { type: "json" });
+    if (sync?.needsOtp && Date.now() - Number(sync.startedAt) < 10 * 60 * 1000) {
+      await store.setJSON("card-otp", { code: text, expires: Date.now() + 5 * 60 * 1000 });
+      rememberUpdate(state, updateId);
+      await saveMergedState(state);
+      await callTelegram(token, "sendMessage", { chat_id: chat.id, text: "הקוד נקלט. ממשיך למשוך את העסקאות." });
+      return reply({ ok: true, otp: true });
+    }
+  }
+
+  if (text === "משוך אשראי" || text === "/cardsync") {
+    rememberUpdate(state, updateId);
+    await saveMergedState(state);
+    const { triggerCardSync } = await import("../lib/card-trigger.mjs");
+    const started = await triggerCardSync({ user: true }).catch(() => false);
+    await callTelegram(token, "sendMessage", { chat_id: chat.id, text: started
+      ? "מתחיל למשוך את העסקאות. אם יגיע קוד, שלח לכאן רק את הספרות."
+      : "אי אפשר להתחיל משיכה כרגע." });
+    return reply({ ok: true, cardSync: true });
+  }
+
   if (update?.callback_query) {
     const callback = update.callback_query;
     const expenseId = String(callback.data || "").replace(/^undo:/, "");

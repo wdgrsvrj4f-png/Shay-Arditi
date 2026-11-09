@@ -696,6 +696,59 @@ document.querySelector('#settings-form').addEventListener('submit', event => {
 });
 
 document.querySelector('#settings-button').addEventListener('click', () => { populateSettings(); document.querySelector('#settings-dialog').showModal(); });
+document.querySelector('#card-connect').addEventListener('click', async () => {
+  const status = document.querySelector('#card-status');
+  const digits = document.querySelector('#card-digits-field');
+  const company = document.querySelector('#card-company');
+  const toggleDigits = () => {
+    const needs = company.value === 'isracard' || company.value === 'amex';
+    digits.hidden = !needs;
+    digits.querySelector('input').required = needs;
+  };
+  company.onchange = toggleDigits;
+  toggleDigits();
+  status.textContent = 'בודק…';
+  document.querySelector('#card-dialog').showModal();
+  try {
+    const response = await apiFetch('/api/card');
+    const card = await response.json();
+    status.textContent = card.needsOtp ? 'נשלח קוד. צריך לשלוח אותו לבוט.'
+      : card.running ? 'מושך עסקאות עכשיו.'
+      : card.lastError ? card.lastError
+      : card.connected ? `הסיסמה שמורה${card.lastSync ? ' · המשיכה האחרונה הצליחה' : ''}.`
+      : 'עדיין אין סיסמה שמורה.';
+  } catch { status.textContent = 'לא ניתן לקרוא את מצב הכרטיס.'; }
+});
+document.querySelector('#card-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.querySelector('#card-status');
+  const body = Object.fromEntries(new FormData(form));
+  status.textContent = 'שומר…';
+  try {
+    const response = await apiFetch('/api/card', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error();
+    form.elements.password.value = '';
+    status.textContent = 'הסיסמה נשמרה מוצפנת. אפשר למשוך עסקאות.';
+  } catch { status.textContent = 'השמירה לא עברה.'; }
+});
+document.querySelector('#card-pull').addEventListener('click', async () => {
+  const status = document.querySelector('#card-status');
+  status.textContent = 'מתחיל משיכה…';
+  try {
+    const response = await apiFetch('/api/card/sync', { method: 'POST' });
+    status.textContent = response.status === 202 ? 'המשיכה התחילה. אם יגיע קוד, שולחים אותו לבוט.'
+      : response.status === 400 ? 'קודם שומרים את הסיסמה.'
+      : 'אי אפשר להתחיל משיכה כרגע.';
+  } catch { status.textContent = 'אי אפשר להתחיל משיכה כרגע.'; }
+});
+document.querySelector('#card-forget').addEventListener('click', async () => {
+  if (!confirm('למחוק את סיסמת הכרטיס מהשרת?')) return;
+  const status = document.querySelector('#card-status');
+  await apiFetch('/api/card', { method: 'DELETE' });
+  document.querySelector('#card-form').reset();
+  status.textContent = 'הסיסמה נמחקה.';
+});
 document.querySelector('#manage-button-secondary').addEventListener('click', () => { renderTemplates(); document.querySelector('#manage-dialog').showModal(); });
 document.querySelector('#add-expense').addEventListener('click', () => { document.querySelector('#expense-form').elements.date.value = todayISO; document.querySelector('#expense-dialog').showModal(); });
 document.querySelector('#add-income').addEventListener('click', () => { document.querySelector('#income-form').elements.date.value = todayISO; document.querySelector('#income-dialog').showModal(); });

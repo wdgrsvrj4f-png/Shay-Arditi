@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@netlify/blobs": "11.1.7"
+    "@netlify/blobs": "11.1.7",
+    "@sparticuz/chromium": "^153.0.0",
+    "israeli-bank-scrapers": "^6.13.0"
   },
   "overrides": {
     "@netlify/otel": "7.0.6"
