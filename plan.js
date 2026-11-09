@@ -144,7 +144,7 @@ function renderClose(view,funds){
     (view.window.partial?'':closing?(confirmed?'<p class="ok-note">ההפקדות סומנו כבוצעו בפועל ✓</p>':
     '<p class="note">החודש נסגר, אבל ההפקדות עדיין לא אומתו. ודא שיש מספיק כסף בעו״ש אחרי חיובים קרובים.</p><button id="confirm-deposit" class="action">ביצעתי את ההפקדות בפיקדונות</button>'):
     '<button id="close-month" class="action" '+(!closingAllowed(snapshot,...chosenMonth.split('-').map(Number),today())?'disabled':'')+'>סגור חודש והכן הפקדות</button>')+
-    (!view.closed&&today()<=view.window.end?'<p class="note">סגירה זמינה רק לאחר סוף החודש, ורק אם אין חריגה שלא טופלה.</p>':''));
+    (!view.closed&&today()<=view.window.end?'<p class="note">סגירה זמינה רק לאחר סוף החודש, ורק אם אין חריגה שלא טופלה.</p>':'');
   document.querySelector('#close-month')?.addEventListener('click',async()=>await saveEdit(state=>{const [y,m]=chosenMonth.split('-').map(Number);if(!closingAllowed(state,y,m,today()))return false;const close=proposedClose(state,y,m);state.planEvents.push(makeEntry('close',{date:today(),month:chosenMonth,allocations:close.allocations}));}));
   document.querySelector('#confirm-deposit')?.addEventListener('click',async()=>{if(!window.confirm('מאשר שהעברת בפועל את כל הסכומים לפיקדונות הנקובים? פעולה זו אינה מעבירה כסף בבנק.'))return;await saveEdit(state=>{const close=state.planEvents.find(x=>x.kind==='close'&&x.month===chosenMonth);if(!close||state.planEvents.some(x=>x.kind==='depositConfirmed'&&x.closeId===close.id))return false;state.planEvents.push(makeEntry('depositConfirmed',{date:today(),closeId:close.id}));});});
 }
