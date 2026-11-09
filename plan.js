@@ -1,5 +1,5 @@
 import { INCOME, KEPT, LOCKED, classifyExpense, money, planWindow } from '/shared/plan.js';
-import { FUND_IDS, MOVEABLE_IDS, monthView, proposedClose, balancesFromDeposits, canTransfer, canUseFund, closingAllowed, dayPace, makeEntry } from '/shared/plan-ledger.js';
+import { FUND_IDS, MOVEABLE_IDS, TARGET_IDS, monthView, proposedClose, balancesFromDeposits, canTransfer, canUseFund, closingAllowed, dayPace, makeEntry } from '/shared/plan-ledger.js';
 import { cardGroups } from '/shared/budget.js';
 
 const e = value => String(value ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -73,7 +73,7 @@ function boxLine(item, balances) {
 function render(){
   const [year,month]=chosenMonth.split('-').map(Number);
   const view=monthView(snapshot,year,month), funds=balancesFromDeposits(snapshot);
-  const pace=dayPace(view.freeLeft,(today()>view.window.start?today():view.window.start),view.window.end);
+  const pace=dayPace(view.safeFreeLeft,(today()>view.window.start?today():view.window.start),view.window.end);
   const full=view.lockedSum+view.keptSum+view.freeBudget;
   document.querySelector('#month-select').value=chosenMonth;
   document.querySelector('#banner').innerHTML=new Date(today()+'T12:00:00').getDay()===0?'<div class="banner">יום ראשון: כדאי לעשות התאמה שבועית של העסקאות והחיובים.</div>':'';
@@ -82,10 +82,10 @@ function render(){
   '<div class="legend"><span>מחויב '+cur(view.lockedSum)+'</span><span>לשמור '+cur(view.keptSum)+'</span><span>חופשי '+cur(view.freeBudget)+'</span></div>'+
   '<div class="stats"><div class="stat"><small>קצב ליום</small><strong>'+cur(pace.daily)+'</strong></div><div class="stat"><small>ל־7 ימים</small><strong>'+cur(pace.weekly)+'</strong></div><div class="stat"><small>רזרבה בפיקדון</small><strong>'+cur(funds.balances.reserve)+'</strong></div></div>'+
   (view.window.partial?'<p class="note">נובמבר הוא חודש מעבר יחסי בלבד. לא סוגרים אותו בהפקדות אוטומטיות.</p>':'')+
-  (view.over.length?'<p class="note bad">יש חריגה בקטגוריה. העבר תקציב כדי לאזן לפני סגירת החודש.</p>':'')+
+  (view.over.length?'<p class="note bad">יש חריגה של '+cur(view.deficits)+' בקטגוריות. הסכום כבר הופחת מהכסף הפנוי הבטוח; העבר תקציב כדי לאזן.</p>':'')+
   '<p class="note">המספר הוא מסגרת תכנון. יש לוודא בנפרד כיסוי לחיובי אשראי, להלוואות ולטסט הקרוב.</p>';
   document.querySelector('#ask').innerHTML='<h2>אפשר להרשות לעצמי?</h2><label for="wish">כמה אני רוצה להוציא?</label><input id="wish" inputmode="decimal" type="number" min="0" value="120"><div id="answer"></div>';
-  document.querySelector('#wish').addEventListener('input',evt=>{const cost=Math.max(0,Number(evt.target.value)||0),left=money(view.freeLeft-cost),newPace=dayPace(left,(today()>view.window.start?today():view.window.start),view.window.end);document.querySelector('#answer').innerHTML='<div class="check"><div class="row"><span>יישאר אחרי ההוצאה</span><strong class="'+(left<0?'bad':'')+'">'+cur(left)+'</strong></div><div class="meta">ממוצע חדש ליום: '+cur(newPace.daily)+'. '+(left<0?'חורג מהתקציב.':'הסכום נכנס למסגרת, אם יתר הקטגוריות מכוסות.')+'</div></div>';});
+  document.querySelector('#wish').addEventListener('input',evt=>{const cost=Math.max(0,Number(evt.target.value)||0),left=money(view.safeFreeLeft-cost),newPace=dayPace(left,(today()>view.window.start?today():view.window.start),view.window.end);document.querySelector('#answer').innerHTML='<div class="check"><div class="row"><span>יישאר אחרי ההוצאה</span><strong class="'+(left<0?'bad':'')+'">'+cur(left)+'</strong></div><div class="meta">ממוצע חדש ליום: '+cur(newPace.daily)+'. '+(left<0?'חורג מהתקציב.':'הסכום נכנס למסגרת, אם יתר הקטגוריות מכוסות.')+'</div></div>';});
   document.querySelector('#wish').dispatchEvent(new Event('input'));
   document.querySelector('#kept').innerHTML=view.lines.filter(x=>KEPT.some(item=>item.id===x.id)).map(x=>boxLine(x,funds.balances)).join('');
   document.querySelector('#locked').innerHTML=view.lines.filter(x=>LOCKED.some(item=>item.id===x.id)).map(x=>boxLine(x,funds.balances)).join('');
@@ -100,7 +100,7 @@ function renderActions(view,funds){
   '<label>לאיזו קטגוריה?</label><select name="plan">'+selectOptions(['free',...KEPT.map(x=>x.id),...LOCKED.map(x=>x.id)],'free')+'</select>'+
   '<div class="duo"><div><label>יום הקנייה</label><input type="date" name="date" required value="'+today()+'"></div><div><label>תאריך חיוב אשראי (רק אם משלמים באשראי)</label><input type="date" name="due" value="'+calcCreditDue(today(),snapshot.settings)+'"></div></div>'+
   '<button class="action" type="submit">רשום הוצאה</button></form><hr><h2>העברה בין קטגוריות</h2><p class="note">העברה תקציבית בלבד. לא מעבירים כסף בבנק.</p>'+
-  '<form id="transfer"><div class="duo"><div><label>מאיזו קטגוריה</label><select name="from">'+selectOptions(MOVEABLE_IDS,'free')+'</select></div><div><label>לאיזו קטגוריה</label><select name="to">'+selectOptions(MOVEABLE_IDS,'food')+'</select></div></div><label>כמה ₪</label><input required name="amount" type="number" min="0.01" step="0.01"><button class="action" '+(hasClosed?'disabled':'')+'>העבר בתקציב</button></form>';
+  '<form id="transfer"><div class="duo"><div><label>מאיזו קטגוריה</label><select name="from">'+selectOptions(MOVEABLE_IDS,'free')+'</select></div><div><label>לאיזו קטגוריה</label><select name="to">'+selectOptions(TARGET_IDS,'food')+'</select></div></div><label>כמה ₪</label><input required name="amount" type="number" min="0.01" step="0.01"><button class="action" '+(hasClosed?'disabled':'')+'>העבר בתקציב</button></form>';
   document.querySelector('#quick-expense').addEventListener('submit',async ev=>{
     ev.preventDefault();const data=new FormData(ev.currentTarget),date=String(data.get('date')),amount=Number(data.get('amount')),method=String(data.get('method')),plan=String(data.get('plan'));
     if(!Number.isFinite(amount)||amount<=0||!date){alertMsg('בדוק את פרטי ההוצאה');return;}
@@ -149,7 +149,7 @@ function renderClose(view,funds){
   document.querySelector('#confirm-deposit')?.addEventListener('click',async()=>{if(!window.confirm('מאשר שהעברת בפועל את כל הסכומים לפיקדונות הנקובים? פעולה זו אינה מעבירה כסף בבנק.'))return;await saveEdit(state=>{const close=state.planEvents.find(x=>x.kind==='close'&&x.month===chosenMonth);if(!close||state.planEvents.some(x=>x.kind==='depositConfirmed'&&x.closeId===close.id))return false;state.planEvents.push(makeEntry('depositConfirmed',{date:today(),closeId:close.id}));});});
 }
 function renderCashflow(){
-  const groups=cardGroups(snapshot).filter(g=>g.dueDate>=today());
+  const groups=cardGroups({creditPayments:snapshot.creditPayments||[],transactions:snapshot.transactions||[]}).filter(g=>g.dueDate>=today());
   const bank=Number(snapshot.settings?.openingBankBalance)||0;
   document.querySelector('#control').innerHTML='<h2>בקרת תזרים לפני העברה לפיקדון</h2><p class="note">תקציב אינו יתרת בנק. אל תעביר כסף אם תשלומי האשראי או ההלוואות אינם מכוסים.</p>'+
   (groups.length?groups.slice(0,4).map(g=>'<div class="row line"><span>אשראי צפוי '+e(g.dueDate)+'</span><b>'+cur(g.amount)+'</b></div>').join(''):'<p class="note">אין חיובי אשראי צפויים ברישום. ודא שלא חסרים נתונים.</p>')+
