@@ -120,7 +120,7 @@ export function proposedClose(state, year, month) {
     else allocations.reserve = money(allocations.reserve + left);
   }
   return { ...view, allocations, total: money(Object.values(allocations).reduce((a, b) => a + b, 0)),
-    ready: !view.window.partial && !view.closed && view.over.length === 0 };
+    ready: !view.window.partial && !view.closed && view.over.length === 0 && view.funding.found && view.funding.uncovered === 0 };
 }
 
 export function canTransfer(state, date, from, to, amount) {
