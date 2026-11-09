@@ -5,7 +5,9 @@ import { INCOME, KEPT, LOCKED, classifyExpense, money, planWindow, sum } from '.
 
 export const FUND_IDS = ['reserve', ...KEPT.filter(item => item.sink).map(item => item.id)];
 export const MOVEABLE_IDS = ['free', ...KEPT.map(item => item.id)];
+export const TARGET_IDS = [...MOVEABLE_IDS, ...LOCKED.map(item => item.id)];
 const ids = new Set(MOVEABLE_IDS);
+const targets = new Set(TARGET_IDS);
 const fundIds = new Set(FUND_IDS);
 
 export function monthOf(date) { return String(date || '').slice(0, 7); }
@@ -57,10 +59,10 @@ export function monthView(state, year, month) {
     if (!fundPaid) spent[plan] = money((spent[plan] || 0) + Number(item.amount || 0));
   }
   rows.sort((a, b) => b.date.localeCompare(a.date));
-  const shifts = Object.fromEntries(MOVEABLE_IDS.map(id => [id, 0]));
+  const shifts = Object.fromEntries(TARGET_IDS.map(id => [id, 0]));
   for (const entry of safeEvents(state)) {
     if (entry.kind !== 'transfer' || monthOf(entry.date) !== monthKey) continue;
-    if (!ids.has(entry.from) || !ids.has(entry.to)) continue;
+    if (!ids.has(entry.from) || !targets.has(entry.to)) continue;
     shifts[entry.from] = money(shifts[entry.from] - entry.amount);
     shifts[entry.to] = money(shifts[entry.to] + entry.amount);
   }
@@ -75,8 +77,10 @@ export function monthView(state, year, month) {
   const freeBudget = money((INCOME - lockedSum - keptSum) * factor + shifts.free);
   const freeSpent = money(spent.free || 0);
   const freeLeft = money(freeBudget - freeSpent);
+  const deficits = money(lines.reduce((s, line) => s + Math.max(0, -line.left), 0));
+  const safeFreeLeft = money(freeLeft - deficits);
   return { window, monthKey, lines, rows, shifts, freeBudget, freeSpent, freeLeft,
-    lockedSum: money(lockedSum * factor), keptSum: money(keptSum * factor),
+    lockedSum: money(lockedSum * factor), keptSum: money(keptSum * factor), deficits, safeFreeLeft,
     over: [...lines.filter(row => row.left < 0).map(row => row.id), ...(freeLeft < 0 ? ['free'] : [])],
     closed: safeEvents(state).some(entry => entry.kind === 'close' && entry.month === monthKey) };
 }
@@ -91,11 +95,11 @@ export function proposedClose(state, year, month) {
     else allocations.reserve = money(allocations.reserve + left);
   }
   return { ...view, allocations, total: money(Object.values(allocations).reduce((a, b) => a + b, 0)),
-    ready: !view.closed && view.over.length === 0 };
+    ready: !view.window.partial && !view.closed && view.over.length === 0 };
 }
 
 export function canTransfer(state, date, from, to, amount) {
-  if (!ids.has(from) || !ids.has(to) || from === to || !Number.isFinite(amount) || amount <= 0) return false;
+  if (!ids.has(from) || !targets.has(to) || from === to || !Number.isFinite(amount) || amount <= 0) return false;
   const [year, month] = date.split('-').map(Number);
   const view = monthView(state, year, month);
   if (view.closed || date < view.window.start || date > view.window.end) return false;
@@ -112,7 +116,7 @@ export function canUseFund(state, fundId, amount, expenseId) {
 
 export function closingAllowed(state, year, month, todayISO) {
   const preview = proposedClose(state, year, month);
-  return preview.ready && todayISO > preview.window.end;
+  return preview.ready && !preview.window.partial && todayISO > preview.window.end;
 }
 
 export function dayPace(left, currentDate, endDate) {
