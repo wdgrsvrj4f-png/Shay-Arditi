@@ -20,14 +20,18 @@ const safeTransactions = state => Array.isArray(state?.transactions) ? state.tra
 export function balancesFromDeposits(state) {
   const balances = Object.fromEntries(FUND_IDS.map(id => [id, 0]));
   const awaitingDeposit = Object.fromEntries(FUND_IDS.map(id => [id, 0]));
+  const confirmed = new Set(safeEvents(state).filter(entry => entry.kind === 'depositConfirmed').map(entry => entry.closeId));
   for (const entry of safeEvents(state)) {
     if (entry.kind !== 'close') continue;
-    const target = entry.deposited ? balances : awaitingDeposit;
+    const target = confirmed.has(entry.id) ? balances : awaitingDeposit;
     for (const [id, value] of Object.entries(entry.allocations || {})) {
       if (fundIds.has(id)) target[id] = money(target[id] + Number(value || 0));
     }
   }
   for (const entry of safeEvents(state)) {
+    if (entry.kind === 'fundOpening' && fundIds.has(entry.fundId)) {
+      balances[entry.fundId] = money(balances[entry.fundId] + Number(entry.amount || 0));
+    }
     if (entry.kind === 'fundUse' && fundIds.has(entry.fundId)) {
       balances[entry.fundId] = money(balances[entry.fundId] - Number(entry.amount || 0));
     }
