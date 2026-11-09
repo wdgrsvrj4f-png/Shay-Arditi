@@ -73,7 +73,7 @@ function boxLine(item, balances) {
 function render(){
   const [year,month]=chosenMonth.split('-').map(Number);
   const view=monthView(snapshot,year,month), funds=balancesFromDeposits(snapshot);
-  const pace=dayPace(view.freeLeft,Math.max(today(),view.window.start),view.window.end);
+  const pace=dayPace(view.freeLeft,(today()>view.window.start?today():view.window.start),view.window.end);
   const full=view.lockedSum+view.keptSum+view.freeBudget;
   document.querySelector('#month-select').value=chosenMonth;
   document.querySelector('#banner').innerHTML=new Date(today()+'T12:00:00').getDay()===0?'<div class="banner">יום ראשון: כדאי לעשות התאמה שבועית של העסקאות והחיובים.</div>':'';
@@ -85,7 +85,7 @@ function render(){
   (view.over.length?'<p class="note bad">יש חריגה בקטגוריה. העבר תקציב כדי לאזן לפני סגירת החודש.</p>':'')+
   '<p class="note">המספר הוא מסגרת תכנון. יש לוודא בנפרד כיסוי לחיובי אשראי, להלוואות ולטסט הקרוב.</p>';
   document.querySelector('#ask').innerHTML='<h2>אפשר להרשות לעצמי?</h2><label for="wish">כמה אני רוצה להוציא?</label><input id="wish" inputmode="decimal" type="number" min="0" value="120"><div id="answer"></div>';
-  document.querySelector('#wish').addEventListener('input',evt=>{const cost=Math.max(0,Number(evt.target.value)||0),left=money(view.freeLeft-cost),newPace=dayPace(left,Math.max(today(),view.window.start),view.window.end);document.querySelector('#answer').innerHTML='<div class="check"><div class="row"><span>יישאר אחרי ההוצאה</span><strong class="'+(left<0?'bad':'')+'">'+cur(left)+'</strong></div><div class="meta">ממוצע חדש ליום: '+cur(newPace.daily)+'. '+(left<0?'חורג מהתקציב.':'הסכום נכנס למסגרת, אם יתר הקטגוריות מכוסות.')+'</div></div>';});
+  document.querySelector('#wish').addEventListener('input',evt=>{const cost=Math.max(0,Number(evt.target.value)||0),left=money(view.freeLeft-cost),newPace=dayPace(left,(today()>view.window.start?today():view.window.start),view.window.end);document.querySelector('#answer').innerHTML='<div class="check"><div class="row"><span>יישאר אחרי ההוצאה</span><strong class="'+(left<0?'bad':'')+'">'+cur(left)+'</strong></div><div class="meta">ממוצע חדש ליום: '+cur(newPace.daily)+'. '+(left<0?'חורג מהתקציב.':'הסכום נכנס למסגרת, אם יתר הקטגוריות מכוסות.')+'</div></div>';});
   document.querySelector('#wish').dispatchEvent(new Event('input'));
   document.querySelector('#kept').innerHTML=view.lines.filter(x=>KEPT.some(item=>item.id===x.id)).map(x=>boxLine(x,funds.balances)).join('');
   document.querySelector('#locked').innerHTML=view.lines.filter(x=>LOCKED.some(item=>item.id===x.id)).map(x=>boxLine(x,funds.balances)).join('');
@@ -115,7 +115,7 @@ function renderActions(view,funds){
   });
   document.querySelector('#transfer').addEventListener('submit',async ev=>{
     ev.preventDefault();const form=new FormData(ev.currentTarget),from=String(form.get('from')),to=String(form.get('to')),amount=money(form.get('amount'));
-    await saveEdit(state=>{const date=chosenMonth+'-01';if(!canTransfer(state,date,from,to,amount))return false;
+    await saveEdit(state=>{const date=view.window.start;if(!canTransfer(state,date,from,to,amount))return false;
       state.planEvents.push(makeEntry('transfer',{date,from,to,amount}));
     });
   });
