@@ -105,7 +105,7 @@ function validate(value) {
     } else if (item.kind === 'fundMove') {
       if (!fundIds.has(item.from) || !fundIds.has(item.to) || item.from === item.to || !validAmount(item.amount)) return null;
     } else if (item.kind === 'close') {
-      if (!/^\\d{4}-\\d{2}$/.test(item.month) || !validDate(item.month + '-01')) return null;
+      if (!/^\d{4}-\d{2}$/.test(item.month) || !validDate(item.month + '-01')) return null;
       if (typeof item.allocations !== 'object' || item.allocations === null || Array.isArray(item.allocations)) return null;
       if (Object.entries(item.allocations).some(([id, amount]) => !fundIds.has(id) || !validAmount(amount, true))) return null;
       if (Object.values(item.allocations).reduce((a, b) => a + Number(b), 0) > 12500) return null;
