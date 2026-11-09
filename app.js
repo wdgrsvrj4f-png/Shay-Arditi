@@ -521,6 +521,12 @@ function openCreditPayment(group) {
 }
 
 function deleteTransaction(id) {
+  const funded = (state.planEvents || []).find(item => item.kind === 'fundUse' && item.expenseId === id
+    && !(state.planEvents || []).some(reversal => reversal.kind === 'fundUseReversal' && reversal.fundUseId === item.id));
+  if (funded) {
+    alert('העסקה משויכת לפיקדון. בטל קודם את השיוך במסך התוכנית כדי לא לפגוע ביתרות הקרן.');
+    return;
+  }
   const removed = state.transactions.find(item => item.id === id);
   const message = removed?.type === 'debt_payment' && removed.principal === undefined
     ? 'בתשלום ישן זה לא נשמר חלק הקרן. מחיקתו לא תשחזר את יתרת החוב; יהיה צורך לעדכן אותה בנפרד. למחוק?'
