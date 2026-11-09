@@ -71,9 +71,6 @@ export function sum(items, key = 'amount') {
 export function planWindow(year, month) {
   const last = new Date(year, month, 0).getDate();
   const pad = value => String(value).padStart(2, '0');
-  if (year === 2026 && month === 11) {
-    return { start: '2026-11-10', end: '2026-11-30', factor: 20 / 30, partial: true };
-  }
   return { start: `${year}-${pad(month)}-01`, end: `${year}-${pad(month)}-${pad(last)}`, factor: 1, partial: false };
 }
 

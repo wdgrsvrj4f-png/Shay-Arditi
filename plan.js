@@ -82,7 +82,6 @@ function render(){
   '<div class="bar"><i style="width:'+(view.lockedSum/full*100)+'%;background:#8b93a1"></i><i style="width:'+(view.keptSum/full*100)+'%;background:#e4b56a"></i><i style="width:'+(view.freeBudget/full*100)+'%;background:#8dcea8"></i></div>'+
   '<div class="legend"><span>מחויב '+cur(view.lockedSum)+'</span><span>לשמור '+cur(view.keptSum)+'</span><span>חופשי '+cur(view.freeBudget)+'</span></div>'+
   '<div class="stats"><div class="stat"><small>קצב ליום</small><strong>'+cur(pace.daily)+'</strong></div><div class="stat"><small>ל־7 ימים</small><strong>'+cur(pace.weekly)+'</strong></div><div class="stat"><small>רזרבה בפיקדון</small><strong>'+cur(funds.balances.reserve)+'</strong></div></div>'+
-  (view.window.partial?'<p class="note">נובמבר הוא חודש מעבר יחסי בלבד. לא סוגרים אותו בהפקדות אוטומטיות.</p>':'')+
   (!view.funding.found?'<p class="note">הכנסה שמממנת את החודש עדיין לא אומתה. יש לבדוק בתזרים.</p>':'')+
   (view.over.length?'<p class="note bad">יש חריגה של '+cur(view.deficits)+' בקטגוריות. הסכום כבר הופחת מהכסף הפנוי הבטוח; העבר תקציב כדי לאזן.</p>':'')+
   '<p class="note">המספר הוא מסגרת תכנון. יש לוודא בנפרד כיסוי לחיובי אשראי, להלוואות ולטסט הקרוב.</p>';
@@ -149,11 +148,10 @@ function renderClose(view,funds){
   const confirmed=closing&&(snapshot.planEvents||[]).some(ev=>ev.kind==='depositConfirmed'&&ev.closeId===closing.id);
   const rows=Object.entries(closing?closing.allocations:preview.allocations).filter(([,v])=>Number(v)>0);
   document.querySelector('#closing').innerHTML='<h2>סגירת חודש והפקדות לפיקדונות</h2>'+
-    (view.window.partial?'<p class="note">נובמבר הוא חודש מעבר. לא מופקות בו הפקדות אוטומטיות כדי לא לסמן כסף ישן כחיסכון חדש.</p>':
-    '<p class="note">המערכת מחשבת כמה נשאר בכל קרן אחרי קניות והעברות. היא אינה מעבירה כסף בבנק בעצמה.</p>')+
+    '<p class="note">המערכת מחשבת כמה נשאר בכל קרן אחרי קניות והעברות. היא אינה מעבירה כסף בבנק בעצמה.</p>'+
     rows.map(([id,value])=>'<div class="line row"><span>'+e(byId(id))+'</span><strong>'+cur(value)+'</strong></div>').join('')+
     '<hr><div class="row"><strong>סה״כ להפקדה לפי הרישום</strong><strong>'+cur(rows.reduce((s,x)=>s+Number(x[1]),0))+'</strong></div>'+
-    (view.window.partial?'':closing?(confirmed?'<p class="ok-note">ההפקדות סומנו כבוצעו בפועל ✓</p>':
+    (closing?(confirmed?'<p class="ok-note">ההפקדות סומנו כבוצעו בפועל ✓</p>':
     '<p class="note">החודש נסגר, אבל ההפקדות עדיין לא אומתו. ודא שיש מספיק כסף בעו״ש אחרי חיובים קרובים.</p><button id="confirm-deposit" class="action">ביצעתי את ההפקדות בפיקדונות</button>'):
     '<button id="close-month" class="action" '+(!closingAllowed(snapshot,...chosenMonth.split('-').map(Number),today())?'disabled':'')+'>סגור חודש והכן הפקדות</button>')+
     (!view.closed&&today()<=view.window.end?'<p class="note">סגירה זמינה רק לאחר סוף החודש, ורק אם אין חריגה שלא טופלה.</p>':'');
