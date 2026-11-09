@@ -20,6 +20,7 @@ export function mergeChanges(base, local, remote, { preferLocal = false } = {}) 
   const result = clone(remote);
   result.settings = merge(base.settings, local.settings, remote.settings, 'settings');
   for (const key of lists) {
+    if (key === 'planEvents' && ![base, local, remote].some(state => Object.prototype.hasOwnProperty.call(state, key))) continue;
     const b = new Map((base[key] || []).map(v => [v.id, v]));
     const l = new Map((local[key] || []).map(v => [v.id, v]));
     const r = new Map((remote[key] || []).map(v => [v.id, v]));
