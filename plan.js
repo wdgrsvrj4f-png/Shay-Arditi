@@ -75,9 +75,10 @@ function render(){
   const view=monthView(snapshot,year,month), funds=balancesFromDeposits(snapshot);
   const pace=dayPace(view.safeFreeLeft,(today()>view.window.start?today():view.window.start),view.window.end);
   const full=view.lockedSum+view.keptSum+view.freeBudget;
+  const purchaseDate=today()<view.window.start?view.window.start:today()>view.window.end?view.window.end:today();
   document.querySelector('#month-select').value=chosenMonth;
   document.querySelector('#banner').innerHTML=new Date(today()+'T12:00:00').getDay()===0?'<div class="banner">יום ראשון: כדאי לעשות התאמה שבועית של העסקאות והחיובים.</div>':'';
-  document.querySelector('#hero').innerHTML='<div class="kicker">כמה באמת פנוי לי?</div><div class="amount '+(view.freeLeft<0?'bad':'')+'">'+cur(view.freeLeft)+'</div><div class="sub">מתוך '+cur(view.freeBudget)+' חופשי, במסגרת חודשית של '+cur(INCOME)+'. '+(view.closed?'החודש נסגר.':'')+'</div>'+
+  document.querySelector('#hero').innerHTML='<div class="kicker">כמה באמת פנוי לי?</div><div class="amount '+(view.safeFreeLeft<0?'bad':'')+'">'+cur(view.safeFreeLeft)+'</div><div class="sub">מתוך '+cur(view.freeBudget)+' חופשי, במסגרת חודשית של '+cur(INCOME)+'. '+(view.closed?'החודש נסגר.':'')+'</div>'+
   '<div class="bar"><i style="width:'+(view.lockedSum/full*100)+'%;background:#8b93a1"></i><i style="width:'+(view.keptSum/full*100)+'%;background:#e4b56a"></i><i style="width:'+(view.freeBudget/full*100)+'%;background:#8dcea8"></i></div>'+
   '<div class="legend"><span>מחויב '+cur(view.lockedSum)+'</span><span>לשמור '+cur(view.keptSum)+'</span><span>חופשי '+cur(view.freeBudget)+'</span></div>'+
   '<div class="stats"><div class="stat"><small>קצב ליום</small><strong>'+cur(pace.daily)+'</strong></div><div class="stat"><small>ל־7 ימים</small><strong>'+cur(pace.weekly)+'</strong></div><div class="stat"><small>רזרבה בפיקדון</small><strong>'+cur(funds.balances.reserve)+'</strong></div></div>'+
@@ -98,7 +99,7 @@ function renderActions(view,funds){
   document.querySelector('#actions').innerHTML='<h2>הוצאה חדשה</h2><p class="note">הוצאה נרשמת ביום הקנייה, בלי קשר ליום חיוב הכרטיס. אם האשראי מסתנכרן אוטומטית, אין להזין את אותה קנייה פעמיים.</p>'+
   '<form id="quick-expense"><label>מה קנית?</label><input required name="name" maxlength="100" placeholder="ארוחה, סופר, טיול…"><div class="duo"><div><label>סכום ₪</label><input required name="amount" type="number" min="0.01" step="0.01"></div><div><label>אמצעי תשלום</label><select name="method"><option value="debit">דיירקט</option><option value="cash">מזומן</option><option value="credit">אשראי</option><option value="bank">העברה</option></select></div></div>'+
   '<label>לאיזו קטגוריה?</label><select name="plan">'+selectOptions(['free',...KEPT.map(x=>x.id),...LOCKED.map(x=>x.id)],'free')+'</select>'+
-  '<div class="duo"><div><label>יום הקנייה</label><input type="date" name="date" required value="'+today()+'"></div><div><label>תאריך חיוב אשראי (רק אם משלמים באשראי)</label><input type="date" name="due" value="'+calcCreditDue(today(),snapshot.settings)+'"></div></div>'+
+  '<div class="duo"><div><label>יום הקנייה</label><input type="date" name="date" required value="'+purchaseDate+'"></div><div><label>תאריך חיוב אשראי (רק אם משלמים באשראי)</label><input type="date" name="due" value="'+calcCreditDue(purchaseDate,snapshot.settings)+'"></div></div>'+
   '<button class="action" type="submit">רשום הוצאה</button></form><hr><h2>העברה בין קטגוריות</h2><p class="note">העברה תקציבית בלבד. לא מעבירים כסף בבנק.</p>'+
   '<form id="transfer"><div class="duo"><div><label>מאיזו קטגוריה</label><select name="from">'+selectOptions(MOVEABLE_IDS,'free')+'</select></div><div><label>לאיזו קטגוריה</label><select name="to">'+selectOptions(TARGET_IDS,'food')+'</select></div></div><label>כמה ₪</label><input required name="amount" type="number" min="0.01" step="0.01"><button class="action" '+(hasClosed?'disabled':'')+'>העבר בתקציב</button></form>';
   document.querySelector('#quick-expense').addEventListener('submit',async ev=>{
@@ -106,7 +107,7 @@ function renderActions(view,funds){
     if(!Number.isFinite(amount)||amount<=0||!date){alertMsg('בדוק את פרטי ההוצאה');return;}
     const due=String(data.get('due'));if(method==='credit'&&!due){alertMsg('בחר תאריך חיוב אשראי');return;}
     const id=crypto.randomUUID();
-    await saveEdit(state=>{if(state.transactions.some(tx=>tx.id===id))return false;
+    await saveEdit(state=>{const [yy,mm]=date.slice(0,7).split('-').map(Number);if(monthView(state,yy,mm).closed||state.transactions.some(tx=>tx.id===id))return false;
       const tx={id,type:'expense',name:String(data.get('name')).trim(),amount,date,method,
         category:plan==='food'?'groceries':plan==='charge'?'fuel':plan==='health'?'health':'other',plan,budgeted:true};
       if(method==='credit')tx.creditDueDate=due;
