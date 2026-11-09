@@ -35,6 +35,8 @@ export function balancesFromDeposits(state) {
     }
   }
   for (const entry of safeEvents(state)) {
+    if (entry.kind === 'salaryExcess') balances.reserve = money(balances.reserve + Number(entry.amount || 0));
+    if (entry.kind === 'reserveTopUp') balances.reserve = money(balances.reserve - Number(entry.amount || 0));
     if (entry.kind === 'fundOpening' && fundIds.has(entry.fundId)) {
       balances[entry.fundId] = money(balances[entry.fundId] + Number(entry.amount || 0));
     }
@@ -47,6 +49,24 @@ export function balancesFromDeposits(state) {
     }
   }
   return { balances, awaitingDeposit };
+}
+
+export function fundingStatus(state, year, month) {
+  // A calendar month's budget is financed by the preceding month's salary.
+  const prev = new Date(Date.UTC(year, month - 2, 1));
+  const salaryMonth = [prev.getUTCFullYear(), String(prev.getUTCMonth() + 1).padStart(2, '0')].join('-');
+  const salaryRows = safeTransactions(state).filter(tx => tx.type === 'income'
+    && monthOf(tx.date) === salaryMonth && /משכורת|שכר עבודה|salary|paycheck/i.test(String(tx.name || '')));
+  const found = salaryRows.length > 0;
+  const received = money(sum(salaryRows));
+  const target = [year, String(month).padStart(2, '0')].join('-');
+  const toppedUp = money(safeEvents(state).filter(item => item.kind === 'reserveTopUp' && item.budgetMonth === target).reduce((total, item) => total + Number(item.amount), 0));
+  const movedExcess = money(safeEvents(state).filter(item => item.kind === 'salaryExcess' && item.budgetMonth === target).reduce((total, item) => total + Number(item.amount), 0));
+  const shortfall = found ? Math.max(0, money(INCOME - received)) : 0;
+  const surplus = found ? Math.max(0, money(received - INCOME)) : 0;
+  return { found, salaryMonth, received, shortfall, surplus, toppedUp,
+    uncovered: money(Math.max(0, shortfall - toppedUp)),
+    excessToDeposit: money(Math.max(0, surplus - movedExcess)) };
 }
 
 export function monthView(state, year, month) {
@@ -82,9 +102,10 @@ export function monthView(state, year, month) {
   const freeSpent = money(spent.free || 0);
   const freeLeft = money(freeBudget - freeSpent);
   const deficits = money(lines.reduce((s, line) => s + Math.max(0, -line.left), 0));
-  const safeFreeLeft = money(freeLeft - deficits);
+  const funding = fundingStatus(state, year, month);
+  const safeFreeLeft = money(freeLeft - deficits - funding.uncovered);
   return { window, monthKey, lines, rows, shifts, freeBudget, freeSpent, freeLeft,
-    lockedSum: money(lockedSum * factor + LOCKED.reduce((total,item)=>total+(shifts[item.id]||0),0)), keptSum: money(keptSum * factor + KEPT.reduce((total,item)=>total+(shifts[item.id]||0),0)), deficits, safeFreeLeft,
+    lockedSum: money(lockedSum * factor + LOCKED.reduce((total,item)=>total+(shifts[item.id]||0),0)), keptSum: money(keptSum * factor + KEPT.reduce((total,item)=>total+(shifts[item.id]||0),0)), deficits, safeFreeLeft, funding,
     over: [...lines.filter(row => row.left < 0).map(row => row.id), ...(freeLeft < 0 ? ['free'] : [])],
     closed: safeEvents(state).some(entry => entry.kind === 'close' && entry.month === monthKey) };
 }
