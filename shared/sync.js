@@ -1,6 +1,6 @@
 // A three-way merge applies only edits made since the last acknowledged snapshot.
 // Concurrent edits to the same value require an explicit choice, never last-write-wins.
-const lists = ['obligations', 'debts', 'transactions', 'creditPayments', 'surplusActions'];
+const lists = ['obligations', 'debts', 'transactions', 'creditPayments', 'surplusActions', 'planEvents'];
 const tombstones = { obligations: 'deletedObligationIds', debts: 'deletedDebtIds', transactions: 'deletedTransactionIds' };
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const clone = value => value === undefined ? undefined : structuredClone(value);
