@@ -6,6 +6,7 @@ import { mergeChanges } from '../shared/sync.js';
 import { demoData } from '../scripts/demo-data.mjs';
 
 const fresh = () => ({ transactions: [], planEvents: [] });
+const withSalary = (state, amount = 12500) => { state.transactions.push({id:'salary',type:'income',name:'משכורת',date:'2026-11-10',amount}); return state; };
 const event = (id, kind, properties) => ({id,kind,date:'2026-12-20',...properties});
 
 test('December starts with exactly the agreed free balance', () => {
@@ -27,7 +28,7 @@ test('moving a budget amount redistributes but does not generate money', () => {
   assert.equal(canTransfer(state,'2026-12-15','free','food',2000),false);
 });
 test('overspent essential expenses immediately reduce safe-to-spend and block close', () => {
-  const state=fresh();
+  const state=withSalary(fresh());
   state.transactions.push({id:'a',type:'expense',date:'2026-12-10',name:'סופר',amount:1200,method:'debit',category:'groceries'});
   let view=monthView(state,2026,12);
   assert.equal(view.deficits,200);
@@ -40,7 +41,7 @@ test('overspent essential expenses immediately reduce safe-to-spend and block cl
   assert.equal(closingAllowed(state,2026,12,'2027-01-01'),true);
 });
 test('a month close creates proposals, never claims a bank deposit before confirmation', () => {
-  const state=fresh();
+  const state=withSalary(fresh());
   const close=proposedClose(state,2026,12);
   assert.equal(close.ready,true);
   assert.equal(close.allocations.vacation,500);
@@ -100,4 +101,26 @@ test('reversing a mistaken fund assignment restores both fund balance and normal
   snapshot.transactions.push(state.transactions[0]);
   snapshot.planEvents=state.planEvents;
   assert.ok(validateState(snapshot));
+});
+
+test('a low salary safely decreases spendable money until physically covered from reserve', () => {
+  const state=withSalary(fresh(),11000);
+  let view=monthView(state,2026,12);
+  assert.equal(view.funding.uncovered,1500);
+  assert.equal(view.safeFreeLeft,-357.34);
+  assert.equal(closingAllowed(state,2026,12,'2027-01-01'),false);
+  state.planEvents.push(event('initial','fundOpening',{date:'2026-11-11',fundId:'reserve',amount:3000}));
+  state.planEvents.push(event('covered','reserveTopUp',{date:'2026-11-12',budgetMonth:'2026-12',amount:1500}));
+  view=monthView(state,2026,12);
+  assert.equal(view.safeFreeLeft,1142.66);
+  assert.equal(balancesFromDeposits(state).balances.reserve,1500);
+  assert.equal(closingAllowed(state,2026,12,'2027-01-01'),true);
+});
+test('salary above budget only enters reserve after the user confirms the bank transfer', () => {
+  const state=withSalary(fresh(),15000);
+  assert.equal(monthView(state,2026,12).funding.excessToDeposit,2500);
+  assert.equal(balancesFromDeposits(state).balances.reserve,0);
+  state.planEvents.push(event('more','salaryExcess',{date:'2026-11-11',budgetMonth:'2026-12',amount:2500}));
+  assert.equal(balancesFromDeposits(state).balances.reserve,2500);
+  assert.equal(monthView(state,2026,12).funding.excessToDeposit,0);
 });
