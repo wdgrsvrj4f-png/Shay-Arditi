@@ -22,10 +22,9 @@
       .bar i{display:block;height:100%}
       .legend{display:flex;flex-wrap:wrap;gap:10px 16px;color:var(--muted);font-size:12px}
       .dot{display:inline-block;width:8px;height:8px;border-radius:99px;margin-inline-end:6px}
-      .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
-      .stat{background:#1b1e26;border-radius:14px;padding:12px}
-      .stat small{display:block;color:var(--muted);font-size:11px}
-      .stat strong{font-size:18px}
+      .reserve-line{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding:12px;border-radius:14px;background:#1b1e26}
+      .reserve-line span{font-size:12px;color:var(--muted)}
+      .reserve-line strong{font-size:18px}
       .card{border:1px solid var(--line);border-radius:18px;background:var(--paper);padding:16px;margin-top:12px}
       .card h2{font-size:15px;margin:0 0 10px}
       label{display:block;font-size:12px;color:#c4c9d4;margin-bottom:6px}
@@ -54,13 +53,13 @@
       .card hr{border:0;border-top:1px solid var(--line);margin:17px 0}.ok-note{color:var(--green)}.backlink{display:block;text-align:center;padding:10px;border:1px solid var(--line);border-radius:12px;margin-top:8px;text-decoration:none}
       #status{padding:10px;color:#e4b56a;font-size:12px}
       @media(max-width:560px){.duo{grid-template-columns:1fr}}
-      @media(max-width:560px){.amount{font-size:46px}.stats{grid-template-columns:1fr}.buy{grid-template-columns:1fr}}
+      @media(max-width:560px){.amount{font-size:46px}.buy{grid-template-columns:1fr}}
       [hidden]{display:none!important}
       .fold{padding:0;overflow:hidden}.fold>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:17px 18px;cursor:pointer;font-weight:650;min-height:56px}
       .fold>summary::-webkit-details-marker{display:none}.fold>summary::after{content:'＋';color:var(--green);font-size:21px;font-weight:400}.fold[open]>summary::after{content:'−'}
       .fold[open]>summary{border-bottom:1px solid var(--line)}.fold-content{padding:16px 18px}.fold-content>h2:first-child{display:none}
       :focus-visible{outline:2px solid var(--green);outline-offset:4px}.row>*{min-width:0}.name,.buy strong{overflow-wrap:anywhere}
-      .top{flex-wrap:wrap}.top>div{min-width:0}.stats{grid-template-columns:repeat(3,minmax(0,1fr))}.stat{padding:10px 8px}.stat strong{font-size:clamp(13px,3.7vw,18px)}
+      .top{flex-wrap:wrap}.top>div{min-width:0}
       @media(max-width:360px){.top h1{width:100%}.amount{font-size:40px}.fold>summary,.fold-content{padding:14px}}
     </style>
   </head>
