@@ -3,6 +3,9 @@ const transactionTypes = new Set(["income", "expense", "debt_payment", "cash_wit
 const methods = new Set(["debit", "credit", "cash", "bank"]);
 const categories = new Set(["groceries", "fuel", "transport", "home", "health", "leisure", "other"]);
 const destinations = new Set(["reserve", "savings", "debt", "next_cycle", "other"]);
+const planIds = new Set(["free","pepper","tesla-loan","yotam","school","gym","phone","spotify","food","charge","hair","insurance","wash","girls-clothes","gifts","kids","school-stuff","allowance","my-clothes","care","health","gadgets","events","vacation","license"]);
+const moveable = new Set([...planIds].filter(x => !["pepper","tesla-loan","yotam","school","gym","phone","spotify"].includes(x)));
+const fundIds = new Set(["reserve","insurance","girls-clothes","gifts","my-clothes","health","gadgets","events","vacation","license"]);
 
 function validDate(value, optional = false) {
   if (optional && (value === undefined || value === null || value === "")) return true;
@@ -39,7 +42,8 @@ function validate(value) {
   for (const key of ["deletedObligationIds", "deletedDebtIds", "deletedTransactionIds"]) {
     if (value[key] === undefined) value[key] = [];
   }
-  const arrays = ["obligations", "debts", "deletedObligationIds", "deletedDebtIds", "transactions", "deletedTransactionIds", "creditPayments", "surplusActions", "processedTelegramUpdates"];
+  if (value.planEvents === undefined) value.planEvents = [];
+  const arrays = ["obligations", "debts", "deletedObligationIds", "deletedDebtIds", "transactions", "deletedTransactionIds", "creditPayments", "surplusActions", "planEvents", "processedTelegramUpdates"];
   for (const key of arrays) {
     if (!Array.isArray(value[key]) || value[key].length > (key === "processedTelegramUpdates" ? 500 : 5_000)) return null;
   }
@@ -87,7 +91,34 @@ function validate(value) {
     if (!validDate(item.date) || !validDate(item.cycleKey)) return null;
   }
 
-  if (value.processedTelegramUpdates.some(id => !Number.isSafeInteger(Number(id)))) return null;
+  // Budget plan events are additive and preserve the old v2 data format.
+  for (const item of value.planEvents) {
+    if (!item || !validId(item.id) || !validDate(item.date) || !validName(item.kind)) return null;
+    if (item.kind === 'transfer') {
+      if (!moveable.has(item.from) || !moveable.has(item.to) || item.from === item.to || !validAmount(item.amount)) return null;
+    } else if (item.kind === 'fundUse') {
+      if (!fundIds.has(item.fundId) || !validAmount(item.amount) || !validId(item.expenseId)) return null;
+      const expense = value.transactions.find(tx => tx.id === item.expenseId && tx.type === 'expense');
+      if (!expense || Math.abs(Number(expense.amount) - Number(item.amount)) > 0.009) return null;
+    } else if (item.kind === 'fundOpening') {
+      if (!fundIds.has(item.fundId) || !validAmount(item.amount)) return null;
+    } else if (item.kind === 'fundMove') {
+      if (!fundIds.has(item.from) || !fundIds.has(item.to) || item.from === item.to || !validAmount(item.amount)) return null;
+    } else if (item.kind === 'close') {
+      if (!/^\\d{4}-\\d{2}$/.test(item.month) || !validDate(item.month + '-01')) return null;
+      if (typeof item.allocations !== 'object' || item.allocations === null || Array.isArray(item.allocations)) return null;
+      if (Object.entries(item.allocations).some(([id, amount]) => !fundIds.has(id) || !validAmount(amount, true))) return null;
+      if (Object.values(item.allocations).reduce((a, b) => a + Number(b), 0) > 12500) return null;
+    } else if (item.kind === 'depositConfirmed') {
+      if (!validId(item.closeId)) return null;
+    } else return null;
+  }
+  if (new Set(value.planEvents.map(item => item.id)).size !== value.planEvents.length) return null;
+  if (value.planEvents.filter(item => item.kind === 'fundUse').some((item, i, arr) => arr.findIndex(x => x.expenseId === item.expenseId) !== i)) return null;
+  if (value.planEvents.filter(item => item.kind === 'close').some((item, i, arr) => arr.findIndex(x => x.month === item.month) !== i)) return null;
+  if (value.planEvents.filter(item => item.kind === 'depositConfirmed').some((item, i, arr) => arr.findIndex(x => x.closeId === item.closeId) !== i)) return null;
+  if (value.planEvents.filter(item => item.kind === 'fundOpening').some((item, i, arr) => arr.findIndex(x => x.fundId === item.fundId) !== i)) return null;
+    if (value.processedTelegramUpdates.some(id => !Number.isSafeInteger(Number(id)))) return null;
   if (value.telegramChatId !== undefined && value.telegramChatId !== null && (typeof value.telegramChatId !== "string" || value.telegramChatId.length > 40)) return null;
   if (value.pendingTelegramExpense !== undefined && value.pendingTelegramExpense !== null) {
     if (typeof value.pendingTelegramExpense.text !== "string" || value.pendingTelegramExpense.text.length > 300) return null;
