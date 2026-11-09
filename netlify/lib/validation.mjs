@@ -64,6 +64,7 @@ function validate(value) {
     if (!item || !validId(item.id) || !transactionTypes.has(item.type) || !validName(item.name) || !validAmount(item.amount)) return null;
     if (!validDate(item.date) || !validDate(item.creditDueDate, true)) return null;
     if (item.type === "expense" && item.method === "credit" && !validDate(item.creditDueDate)) return null;
+    if (item.plan !== undefined && !planIds.has(item.plan)) return null;
     if (item.principal !== undefined && (!validAmount(item.principal, true) || Number(item.principal) > Number(item.amount))) return null;
     if (item.type === "expense" && (!categories.has(item.category) || !methods.has(item.method))) return null;
     if (item.type === "debt_payment" && !methods.has(item.method)) return null;
@@ -139,3 +140,4 @@ function validate(value) {
 export function validateState(value) {
   try { return validate(value); } catch { return null; }
 }
+

@@ -1,6 +1,7 @@
 import { requireAuth } from '../lib/auth.mjs';
 import { readJSON, reply } from '../lib/http.mjs';
 import { budgetStore, readSnapshot, writeSnapshot } from '../lib/store.mjs';
+import { validPlanUpdate } from '../lib/plan-validation.mjs';
 import { validateState } from '../lib/validation.mjs';
 
 function canonicalRevision(value) {
@@ -41,6 +42,8 @@ export function createBudgetHandler(getStore = budgetStore) {
       if (!clean) return reply({ error: 'Invalid budget data' }, 400);
       const current = await readSnapshot(store);
       if (canonicalRevision(current.revision) !== revision) return reply({ error: 'Budget changed; refresh and retry' }, 409);
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      if (!validPlanUpdate(current.data, clean, today)) return reply({ error: 'Budget plan rules rejected this update' }, 400);
       const next = { ...clean, telegramChatId: current.data.telegramChatId ?? null,
         processedTelegramUpdates: current.data.processedTelegramUpdates ?? [],
         pendingTelegramExpense: current.data.pendingTelegramExpense ?? null };
@@ -55,3 +58,4 @@ export function createBudgetHandler(getStore = budgetStore) {
   };
 }
 export default createBudgetHandler();
+

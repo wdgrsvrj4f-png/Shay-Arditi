@@ -14,6 +14,10 @@ const budget = createBudgetHandler(async () => store);
 const publicFiles = new Map([
   ['/', ['index.html', 'text/html']], ['/index.html', ['index.html', 'text/html']],
   ['/app.js', ['app.js', 'text/javascript']],
+  ['/boot.js', ['boot.js', 'text/javascript']],
+  ['/fixes.js', ['fixes.js', 'text/javascript']],
+  ['/dialogs-a.html', ['dialogs-a.html', 'text/html']],
+  ['/dialogs-b.html', ['dialogs-b.html', 'text/html']],
   ['/plan.html', ['plan.html', 'text/html']],
   ['/plan.js', ['plan.js', 'text/javascript']],
   ['/shared/plan.js', ['shared/plan.js', 'text/javascript']],
@@ -41,3 +45,4 @@ createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': `${file[1]}; charset=utf-8`, 'Cache-Control': 'no-store' }); res.end(body);
   } catch { res.writeHead(500); res.end('Local preview error'); }
 }).listen(Number(process.argv.includes('--port') ? process.argv[process.argv.indexOf('--port') + 1] : process.env.PORT || 3000), '0.0.0.0', () => console.log('Local budget demo ready; no production services connected.'));
+

@@ -45,6 +45,7 @@
     .row-info small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .small-button{white-space:normal;max-width:100%}
     .amount{max-width:100%;overflow-wrap:anywhere}
+    .section.fold{padding:0;overflow:hidden}.fold>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:17px;font-size:14px;font-weight:650;min-height:56px}.fold>summary::-webkit-details-marker{display:none}.fold>summary::after{content:'＋';color:var(--accent-strong);font-size:21px}.fold[open]>summary::after{content:'−'}.fold[open]>summary{border-bottom:1px solid var(--line)}.fold-content{padding:16px}.fold-content>.section-head h2{display:none}.fold-content>.section-head:has(h2:only-child){display:none}:focus-visible{outline:2px solid var(--accent-strong);outline-offset:3px}
     </style>
   </head>
   <body dir="rtl">
@@ -70,11 +71,11 @@
         </div>
         <div class="actions"><button class="primary" id="add-expense" type="button">＋ הוספת הוצאה</button><button class="outline-button" id="add-income" type="button">＋ משכורת / הכנסה</button><button class="outline-button" id="add-cash" type="button">משיכת מזומן</button></div>
       </section>
-      <section class="section"><div class="section-head"><h2>קבועות והחזרים במחזור</h2><button class="small-button" type="button" id="manage-button-secondary">ניהול</button></div><div class="list" id="commitments"></div></section>
-      <section class="section"><div class="section-head"><h2>חיובי אשראי צפויים</h2><button class="small-button" id="card-connect" type="button">משיכה אוטומטית</button><button class="small-button" id="add-credit-bill" type="button">＋ חיוב קודם</button></div><div class="list" id="credit-bills"></div></section>
+      <details class="section fold"><summary>קבועות והחזרים במחזור</summary><div class="fold-content"><div class="section-head"><h2>קבועות והחזרים במחזור</h2><button class="small-button" type="button" id="manage-button-secondary">ניהול</button></div><div class="list" id="commitments"></div></div></details>
+      <details class="section fold"><summary>חיובי אשראי צפויים</summary><div class="fold-content"><div class="section-head"><h2>חיובי אשראי צפויים</h2><button class="small-button" id="card-connect" type="button">משיכה אוטומטית</button><button class="small-button" id="add-credit-bill" type="button">＋ חיוב קודם</button></div><div class="list" id="credit-bills"></div></div></details>
 
-      <section class="section"><div class="section-head"><h2>חיובים ששולמו</h2></div><p class="section-sub">סימון ששולם לא מוריד שוב מהמשכורת. הקנייה כבר נספרה.</p><div class="list" id="paid-credit-bills"></div></section>
-      <section class="section"><div class="section-head"><h2>תנועות במחזור</h2><span class="section-note">מזומן מהכיס לא נספר</span></div><div class="list" id="transactions"></div></section>
+      <details class="section fold"><summary>חיובים ששולמו</summary><div class="fold-content"><div class="section-head"><h2>חיובים ששולמו</h2></div><p class="section-sub">סימון ששולם לא מוריד שוב מהמשכורת. הקנייה כבר נספרה.</p><div class="list" id="paid-credit-bills"></div></div></details>
+      <details class="section fold"><summary>תנועות במחזור</summary><div class="fold-content"><div class="section-head"><h2>תנועות במחזור</h2><span class="section-note">מזומן מהכיס לא נספר</span></div><div class="list" id="transactions"></div></div></details>
       <div class="sync-footer"><p class="notice" id="sync-status" role="status">מתחבר…</p></div>
     </main>
     <dialog id="expense-dialog"><form class="form" id="expense-form"><div class="formhead"><h2>הוצאה חדשה</h2><button class="close" type="button" data-close aria-label="סגירה">×</button></div><div class="field"><label>על מה הוצאת?<input name="name" maxlength="80" placeholder="למשל: קניות בסופר" required /></label></div><div class="form-grid"><div class="field"><label>סכום<input name="amount" type="number" min="0.01" step="0.01" placeholder="0" required /></label></div><div class="field"><label>תאריך הקנייה<input name="date" type="date" required /></label></div></div><div class="field"><label>איך שילמת?<select name="method"><option value="debit">דיירקט · יורד מיד</option><option value="credit">אשראי · חיוב בהמשך</option><option value="cash">מזומן</option></select></label></div><p class="hint">דיירקט ואשראי יורדים מהמשכורת. מזומן מהכיס לא.</p><button class="save" type="submit">שמירת ההוצאה</button></form></dialog>
@@ -84,3 +85,4 @@
     <script type="module" src="/boot.js?v=14"></script>
   </body>
 </html>
+

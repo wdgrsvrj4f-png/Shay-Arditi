@@ -57,6 +57,13 @@
       #status{padding:10px;color:#e4b56a;font-size:12px}
       @media(max-width:560px){.duo{grid-template-columns:1fr}}
       @media(max-width:560px){.amount{font-size:46px}.stats{grid-template-columns:1fr}.buy{grid-template-columns:1fr}}
+      [hidden]{display:none!important}
+      .fold{padding:0;overflow:hidden}.fold>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:17px 18px;cursor:pointer;font-weight:650;min-height:56px}
+      .fold>summary::-webkit-details-marker{display:none}.fold>summary::after{content:'＋';color:var(--green);font-size:21px;font-weight:400}.fold[open]>summary::after{content:'−'}
+      .fold[open]>summary{border-bottom:1px solid var(--line)}.fold-content{padding:16px 18px}.fold-content>h2:first-child{display:none}
+      :focus-visible{outline:2px solid var(--green);outline-offset:4px}.row>*{min-width:0}.name,.buy strong{overflow-wrap:anywhere}
+      .top{flex-wrap:wrap}.top>div{min-width:0}.stats{grid-template-columns:repeat(3,minmax(0,1fr))}.stat{padding:10px 8px}.stat strong{font-size:clamp(13px,3.7vw,18px)}
+      @media(max-width:360px){.top h1{width:100%}.amount{font-size:40px}.fold>summary,.fold-content{padding:14px}}
     </style>
   </head>
   <body>
@@ -64,32 +71,32 @@
       <div class="top"><h1>התוכנית שלי</h1><div><label for="month-select">חודש התקציב</label><input type="month" id="month-select" style="max-width:180px"></div><a href="/">התזרים</a></div>
       <div id="banner"></div><div id="status" hidden role="status" aria-live="polite"></div>
       <section class="hero" id="hero"></section>
-      <section class="card" id="ask"></section>
-      <section class="card"><h2>כסף שחייבים לשמור</h2><div id="kept"></div></section>
-      <section class="card"><h2>כסף שכבר מחויב</h2><div id="locked"></div><p class="note">החיוב בבנק לא נספר שוב. קונים פעם אחת, ביום הקנייה.</p></section>
-      <section class="card" id="actions"></section>
-      <section class="card"><h2>מה נרשם החודש</h2><div id="rows"></div></section>
-      <section class="card" id="funds"></section>
-      <section class="card" id="closing"></section>
-      <section class="card" id="control"></section>
-      <section class="card rules">
-        <h2>איך מתנהלים</h2>
+      <details class="card fold" id="fold-ask"><summary>אפשר להרשות לעצמי?</summary><div class="fold-content" id="ask"></div></details>
+      <details class="card fold" id="fold-kept"><summary>כסף שחייבים לשמור</summary><div class="fold-content" id="kept"></div></details>
+      <details class="card fold" id="fold-locked"><summary>כסף שכבר מחויב</summary><div class="fold-content"><div id="locked"></div><p class="note">החיוב בבנק לא נספר שוב. קונים פעם אחת, ביום הקנייה.</p></div></details>
+      <details class="card fold" id="fold-actions"><summary>רישום הוצאה והעברה בתקציב</summary><div class="fold-content" id="actions"></div></details>
+      <details class="card fold" id="fold-rows"><summary>מה נרשם החודש</summary><div class="fold-content" id="rows"></div></details>
+      <details class="card fold" id="fold-funds"><summary>פיקדונות וקרנות</summary><div class="fold-content" id="funds"></div></details>
+      <details class="card fold" id="fold-closing"><summary>סגירת חודש</summary><div class="fold-content" id="closing"></div></details>
+      <details class="card fold" id="fold-control"><summary>משכורת ובקרת תזרים</summary><div class="fold-content" id="control"></div></details>
+      <details class="card rules fold" id="fold-rules"><summary>איך מתנהלים</summary><div class="fold-content">
         <ol>
           <li>כל קנייה נרשמת באותו יום. מזומן, דיירקט או אשראי, פעם אחת.</li>
           <li>לפני שמוציאים על משהו שמתחשק, בודקים כמה יישאר חופשי.</li>
           <li>ביום ראשון בערב עוברים על מה שנרשם ועל מה שנשאר.</li>
           <li>בסוף החודש מה שלא נוצל מהחופשי עובר לרזרבה. הקרנות נשארות בצד.</li>
         </ol>
-      </section>
+      </div></details>
     </main>
     <form class="login" id="login" hidden>
       <h1>התוכנית</h1>
       <p class="sub">אותו מפתח של האתר.</p>
-      <label>מפתח</label>
-      <input name="key" type="password" autocomplete="current-password" required />
+      <label for="plan-key">מפתח</label>
+      <input id="plan-key" name="key" type="password" autocomplete="current-password" required />
       <button type="submit">כניסה</button>
-      <p class="note" id="login-error"></p>
+      <p class="note" id="login-error" role="status"></p>
     </form>
     <script type="module" src="/plan.js?v=2"></script>
   </body>
 </html>
+

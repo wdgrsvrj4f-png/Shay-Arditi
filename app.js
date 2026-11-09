@@ -480,6 +480,10 @@ function renderTransactions(transactions) {
 }
 
 function addTransaction(transaction) {
+  if (transaction.type === 'expense' && (state.planEvents || []).some(item => item.kind === 'close' && item.month === transaction.date.slice(0, 7))) {
+    alert('החודש כבר נסגר. לא ניתן להוסיף בו הוצאות.');
+    return false;
+  }
   state.transactions.push({ id: makeId(), ...transaction });
   void saveState();
   render();
@@ -521,6 +525,11 @@ function openCreditPayment(group) {
 }
 
 function deleteTransaction(id) {
+  const transaction = state.transactions.find(item => item.id === id);
+  if (transaction?.type === 'expense' && (state.planEvents || []).some(item => item.kind === 'close' && item.month === transaction.date.slice(0, 7))) {
+    alert('החודש כבר נסגר. לא ניתן למחוק ממנו הוצאות.');
+    return;
+  }
   const funded = (state.planEvents || []).find(item => item.kind === 'fundUse' && item.expenseId === id
     && !(state.planEvents || []).some(reversal => reversal.kind === 'fundUseReversal' && reversal.fundUseId === item.id));
   if (funded) {
@@ -584,11 +593,12 @@ document.querySelector('#expense-form').addEventListener('submit', event => {
   const data = new FormData(event.currentTarget);
   const method = String(data.get('method'));
   const date = String(data.get('date'));
-  addTransaction({
+  const added = addTransaction({
     type: 'expense', name: String(data.get('name')).trim(), amount: Number(data.get('amount')),
     category: 'other', method, date, budgeted: true,
     creditDueDate: method === 'credit' ? creditDueDate(date) : undefined,
   });
+  if (added === false) return;
   event.currentTarget.reset();
   document.querySelector('#expense-dialog').close();
 });
@@ -788,3 +798,4 @@ document.querySelector('#logout-button').addEventListener('click', async () => {
 setLocked(true);
 refreshDate();
 void connectCloud();
+
