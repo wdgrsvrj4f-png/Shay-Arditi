@@ -85,3 +85,19 @@ test('independent device events merge without clobbering existing transactions',
   assert.equal(result.state.planEvents.length,2);
   assert.equal(result.state.transactions.length,base.transactions.length);
 });
+
+test('reversing a mistaken fund assignment restores both fund balance and normal expense classification', () => {
+  const state=fresh();
+  state.planEvents.push(event('initial','fundOpening',{fundId:'vacation',amount:2000}));
+  state.transactions.push({id:'hotel',type:'expense',name:'מלון',date:'2026-12-10',amount:500,method:'debit',category:'leisure'});
+  state.planEvents.push(event('u1','fundUse',{expenseId:'hotel',fundId:'vacation',amount:500}));
+  assert.equal(balancesFromDeposits(state).balances.vacation,1500);
+  assert.equal(monthView(state,2026,12).lines.find(x=>x.id==='vacation').used,0);
+  state.planEvents.push(event('undo','fundUseReversal',{fundUseId:'u1'}));
+  assert.equal(balancesFromDeposits(state).balances.vacation,2000);
+  assert.equal(monthView(state,2026,12).lines.find(x=>x.id==='vacation').used,500);
+  const snapshot=demoData();
+  snapshot.transactions.push(state.transactions[0]);
+  snapshot.planEvents=state.planEvents;
+  assert.ok(validateState(snapshot));
+});
