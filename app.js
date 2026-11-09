@@ -55,6 +55,7 @@ function blankState() {
     deletedTransactionIds: [],
     creditPayments: [],
     surplusActions: [],
+    planEvents: [],
     processedTelegramUpdates: [],
     telegramChatId: null,
   };
@@ -79,6 +80,7 @@ function normalizeState(value) {
       deletedTransactionIds: Array.isArray(value.deletedTransactionIds) ? value.deletedTransactionIds : [],
       creditPayments: Array.isArray(value.creditPayments) ? value.creditPayments : [],
       surplusActions: Array.isArray(value.surplusActions) ? value.surplusActions : [],
+      planEvents: Array.isArray(value.planEvents) ? value.planEvents : [],
       processedTelegramUpdates: Array.isArray(value.processedTelegramUpdates) ? value.processedTelegramUpdates.slice(-500) : [],
     };
   }
@@ -111,7 +113,7 @@ function normalizeState(value) {
 
 function hasData(state) {
   return state.transactions.length || state.obligations.length || state.debts.length || state.creditPayments.length
-    || state.surplusActions.length || state.deletedTransactionIds.length || state.deletedObligationIds.length || state.deletedDebtIds.length
+    || state.surplusActions.length || state.planEvents.length || state.deletedTransactionIds.length || state.deletedObligationIds.length || state.deletedDebtIds.length
     || Number(state.settings?.openingBankBalance) !== 0
     || Boolean(state.telegramChatId)
     || Number(state.settings?.openingCashBalance) !== 0
