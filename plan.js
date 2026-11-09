@@ -1,5 +1,5 @@
 import { INCOME, KEPT, LOCKED, classifyExpense, money, planWindow } from '/shared/plan.js';
-import { FUND_IDS, MOVEABLE_IDS, TARGET_IDS, monthView, proposedClose, balancesFromDeposits, canTransfer, canUseFund, closingAllowed, dayPace, makeEntry } from '/shared/plan-ledger.js';
+import { FUND_IDS, MOVEABLE_IDS, TARGET_IDS, monthView, proposedClose, balancesFromDeposits, fundingStatus, canTransfer, canUseFund, closingAllowed, dayPace, makeEntry } from '/shared/plan-ledger.js';
 import { cardGroups } from '/shared/budget.js';
 
 const e = value => String(value ?? '').replace(/[&<>"']/g, x => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
@@ -83,6 +83,7 @@ function render(){
   '<div class="legend"><span>מחויב '+cur(view.lockedSum)+'</span><span>לשמור '+cur(view.keptSum)+'</span><span>חופשי '+cur(view.freeBudget)+'</span></div>'+
   '<div class="stats"><div class="stat"><small>קצב ליום</small><strong>'+cur(pace.daily)+'</strong></div><div class="stat"><small>ל־7 ימים</small><strong>'+cur(pace.weekly)+'</strong></div><div class="stat"><small>רזרבה בפיקדון</small><strong>'+cur(funds.balances.reserve)+'</strong></div></div>'+
   (view.window.partial?'<p class="note">נובמבר הוא חודש מעבר יחסי בלבד. לא סוגרים אותו בהפקדות אוטומטיות.</p>':'')+
+  (!view.funding.found?'<p class="note">הכנסה שמממנת את החודש עדיין לא אומתה. יש לבדוק בתזרים.</p>':'')+
   (view.over.length?'<p class="note bad">יש חריגה של '+cur(view.deficits)+' בקטגוריות. הסכום כבר הופחת מהכסף הפנוי הבטוח; העבר תקציב כדי לאזן.</p>':'')+
   '<p class="note">המספר הוא מסגרת תכנון. יש לוודא בנפרד כיסוי לחיובי אשראי, להלוואות ולטסט הקרוב.</p>';
   document.querySelector('#ask').innerHTML='<h2>אפשר להרשות לעצמי?</h2><label for="wish">כמה אני רוצה להוציא?</label><input id="wish" inputmode="decimal" type="number" min="0" value="120"><div id="answer"></div>';
@@ -162,9 +163,34 @@ function renderClose(view,funds){
 function renderCashflow(){
   const groups=cardGroups({creditPayments:snapshot.creditPayments||[],transactions:snapshot.transactions||[]}).filter(g=>g.dueDate>=today());
   const bank=Number(snapshot.settings?.openingBankBalance)||0;
-  document.querySelector('#control').innerHTML='<h2>בקרת תזרים לפני העברה לפיקדון</h2><p class="note">תקציב אינו יתרת בנק. אל תעביר כסף אם תשלומי האשראי או ההלוואות אינם מכוסים.</p>'+
-  (groups.length?groups.slice(0,4).map(g=>'<div class="row line"><span>אשראי צפוי '+e(g.dueDate)+'</span><b>'+cur(g.amount)+'</b></div>').join(''):'<p class="note">אין חיובי אשראי צפויים ברישום. ודא שלא חסרים נתונים.</p>')+
-  '<p class="note">יתרת הפתיחה השמורה בתזרים: '+cur(bank)+'. היא אינה בהכרח יתרת העו״ש העדכנית. האפליקציה לא מבצעת העברות בנקאיות.</p><a class="backlink" href="/">פתח את מסך התזרים</a>';
+  const [year,month]=chosenMonth.split('-').map(Number);
+  const funding=fundingStatus(snapshot,year,month);
+  const funds=balancesFromDeposits(snapshot);
+  const fundingLine=!funding.found
+    ? '<p class="note bad">לא נמצאה ברישום משכורת של '+e(funding.salaryMonth)+'. התקציב הוא עדיין יעד תכנון ולא מימון מאומת. יש לרשום משכורת במסך התזרים.</p>'
+    : '<div class="line row"><span>משכורת שמממנת את החודש ('+e(funding.salaryMonth)+')</span><strong>'+cur(funding.received)+'</strong></div>'+
+      (funding.uncovered>0?'<div class="line"><p class="note bad">חסר '+cur(funding.uncovered)+' למימון המסגרת. הפער כבר הופחת מהסכום הפנוי הבטוח.</p><button class="action" id="top-up" '+(funds.balances.reserve<funding.uncovered?'disabled':'')+'>השלמתי '+cur(funding.uncovered)+' מהרזרבה לעו״ש</button></div>':'')+
+      (funding.excessToDeposit>0?'<div class="line"><p class="note">משכורת גבוהה מהמתוכנן. עודף להפקדה לרזרבה: '+cur(funding.excessToDeposit)+'</p><button class="action" id="deposit-excess">הפקדתי את עודף המשכורת לרזרבה</button></div>':'')+
+      (funding.uncovered===0&&funding.excessToDeposit===0?'<p class="ok-note">מימון המשכורת תואם את הכלל שקבענו ✓</p>':'');
+  document.querySelector('#control').innerHTML='<h2>המשכורת ובקרת תזרים</h2><p class="note">תקציב אינו יתרת בנק. את דצמבר מממנת משכורת נובמבר, וכן הלאה. אל תעביר כסף אם חיובים קרובים אינם מכוסים.</p>'+
+  fundingLine+'<hr><h2>אשראי שעדיין עומד לרדת</h2>'+
+  (groups.length?groups.slice(0,4).map(g=>'<div class="row line"><span>חיוב '+e(g.dueDate)+'</span><b>'+cur(g.amount)+'</b></div>').join(''):'<p class="note">אין חיובי אשראי צפויים ברישום. ודא שלא חסרים נתונים.</p>')+
+  '<p class="note">יתרת פתיחה בתזרים: '+cur(bank)+'. היא אינה בהכרח יתרת העו״ש העדכנית. האתר לא מבצע העברות בנקאיות.</p><a class="backlink" href="/">פתח את התזרים / רשום משכורת</a>';
+  document.querySelector('#top-up')?.addEventListener('click',async()=>{
+    const amount=funding.uncovered;
+    if(!window.confirm('רק אחרי שהעברת בפועל '+cur(amount)+' מפיקדון הרזרבה לעו״ש, אשר כאן. מאשר שבוצע?'))return;
+    await saveEdit(state=>{const v=fundingStatus(state,year,month),reserve=balancesFromDeposits(state).balances.reserve;
+      if(v.uncovered<=0||reserve<v.uncovered)return false;
+      state.planEvents.push(makeEntry('reserveTopUp',{date:today(),budgetMonth:chosenMonth,amount:v.uncovered}));
+    });
+  });
+  document.querySelector('#deposit-excess')?.addEventListener('click',async()=>{
+    const amount=funding.excessToDeposit;
+    if(!window.confirm('רק אחרי שהעברת בפועל '+cur(amount)+' לעודף הרזרבה בפיקדון, אשר כאן. מאשר שבוצע?'))return;
+    await saveEdit(state=>{const v=fundingStatus(state,year,month);if(v.excessToDeposit<=0)return false;
+      state.planEvents.push(makeEntry('salaryExcess',{date:today(),budgetMonth:chosenMonth,amount:v.excessToDeposit}));
+    });
+  });
 }
 document.querySelector('#month-select').addEventListener('change',ev=>{if(/^\d{4}-\d{2}$/.test(ev.target.value)){chosenMonth=ev.target.value;if(snapshot)render();}});
 login.addEventListener('submit',async ev=>{ev.preventDefault();try{const r=await fetch('/api/session',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:new FormData(login).get('key')})});document.querySelector('#login-error').textContent=r.ok?'':'קוד הכניסה לא מתאים';if(r.ok)await load();}catch{document.querySelector('#login-error').textContent='לא ניתן להתחבר';}});
