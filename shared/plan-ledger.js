@@ -16,7 +16,11 @@ export function dateAtEnd(month) {
   if (!Number.isInteger(year) || !Number.isInteger(index) || index < 1 || index > 12) return '';
   return planWindow(year, index).end;
 }
-const safeEvents = state => Array.isArray(state?.planEvents) ? state.planEvents : [];
+const safeEvents = state => {
+  const all = Array.isArray(state?.planEvents) ? state.planEvents : [];
+  const reversed = new Set(all.filter(item => item.kind === 'fundUseReversal').map(item => item.fundUseId));
+  return all.filter(item => !reversed.has(item.id));
+};
 const safeTransactions = state => Array.isArray(state?.transactions) ? state.transactions : [];
 
 export function balancesFromDeposits(state) {
@@ -109,7 +113,10 @@ export function canTransfer(state, date, from, to, amount) {
 
 export function canUseFund(state, fundId, amount, expenseId) {
   if (!fundIds.has(fundId) || !Number.isFinite(amount) || amount <= 0) return false;
-  if (!safeTransactions(state).some(tx => tx.type === 'expense' && tx.id === expenseId && money(tx.amount) === money(amount))) return false;
+  const expense = safeTransactions(state).find(tx => tx.type === 'expense' && tx.id === expenseId && money(tx.amount) === money(amount));
+  if (!expense) return false;
+  const [year, month] = expense.date.slice(0, 7).split('-').map(Number);
+  if (monthView(state, year, month).closed) return false;
   if (safeEvents(state).some(event => event.kind === 'fundUse' && event.expenseId === expenseId)) return false;
   return money(amount) <= (balancesFromDeposits(state).balances[fundId] || 0);
 }
