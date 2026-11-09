@@ -80,7 +80,7 @@ export function monthView(state, year, month) {
   const deficits = money(lines.reduce((s, line) => s + Math.max(0, -line.left), 0));
   const safeFreeLeft = money(freeLeft - deficits);
   return { window, monthKey, lines, rows, shifts, freeBudget, freeSpent, freeLeft,
-    lockedSum: money(lockedSum * factor), keptSum: money(keptSum * factor), deficits, safeFreeLeft,
+    lockedSum: money(lockedSum * factor + LOCKED.reduce((total,item)=>total+(shifts[item.id]||0),0)), keptSum: money(keptSum * factor + KEPT.reduce((total,item)=>total+(shifts[item.id]||0),0)), deficits, safeFreeLeft,
     over: [...lines.filter(row => row.left < 0).map(row => row.id), ...(freeLeft < 0 ? ['free'] : [])],
     closed: safeEvents(state).some(entry => entry.kind === 'close' && entry.month === monthKey) };
 }
