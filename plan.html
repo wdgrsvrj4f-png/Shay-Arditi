@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101217" />
+    <title>התוכנית</title>
+    <style>
+      :root{color-scheme:dark;--ink:#e8e9ed;--muted:#a3a7b2;--line:#2c313c;--paper:#16181e;--canvas:#101217;--green:#8dcea8;--amber:#e4b56a;--slate:#9aa3b2;--red:#ff8d83}
+      *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Arial,sans-serif;overflow-x:clip}
+      button,input,select{font:inherit}button,a{cursor:pointer}a{color:inherit}
+      .wrap{width:min(100% - 28px,760px);margin:22px auto 64px}
+      .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+      .top a{text-decoration:none;border:1px solid #343844;border-radius:12px;padding:8px 12px;color:#d5d8df;font-size:13px}
+      h1{font-size:13px;font-weight:500;letter-spacing:.08em;color:#9aa0ab;margin:0}
+      .hero{border:1px solid var(--line);border-radius:22px;background:var(--paper);padding:26px 22px 20px}
+      .kicker{color:var(--muted);font-size:13px}
+      .amount{font-size:58px;font-weight:720;letter-spacing:-2px;line-height:1;margin:8px 0;color:var(--green)}
+      .amount.bad{color:var(--red)}
+      .sub{color:#b7bcc6;font-size:14px}
+      .bar{display:flex;height:14px;border-radius:99px;overflow:hidden;background:#2a2e38;margin:18px 0 10px}
+      .bar i{display:block;height:100%}
+      .legend{display:flex;flex-wrap:wrap;gap:10px 16px;color:var(--muted);font-size:12px}
+      .dot{display:inline-block;width:8px;height:8px;border-radius:99px;margin-inline-end:6px}
+      .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+      .stat{background:#1b1e26;border-radius:14px;padding:12px}
+      .stat small{display:block;color:var(--muted);font-size:11px}
+      .stat strong{font-size:18px}
+      .card{border:1px solid var(--line);border-radius:18px;background:var(--paper);padding:16px;margin-top:12px}
+      .card h2{font-size:15px;margin:0 0 10px}
+      label{display:block;font-size:12px;color:#c4c9d4;margin-bottom:6px}
+      input,select{width:100%;height:44px;border:1px solid #424856;border-radius:11px;background:#191c24;color:var(--ink);padding:0 12px}
+      .check{margin-top:12px;padding:12px;border-radius:14px;background:#1b1e26}
+      .check strong{font-size:22px}
+      .row{display:flex;justify-content:space-between;gap:10px;align-items:center}
+      .line{padding:10px 0;border-top:1px solid #262a33}
+      .line:first-of-type{border-top:0}
+      .tiny{height:5px;background:#2a2e38;border-radius:8px;margin-top:7px;overflow:hidden}
+      .tiny i{display:block;height:100%;background:var(--amber)}
+      .tiny i.over{background:var(--red)}
+      .name{font-size:14px}
+      .meta{color:var(--muted);font-size:12px}
+      .buy{display:grid;grid-template-columns:1fr 148px;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #262a33}
+      .buy select{height:38px}
+      .note{color:var(--muted);font-size:12px;margin:8px 0 0}
+      .banner{border:1px solid #5c4a28;background:#2a2418;color:#f0d7a4;border-radius:14px;padding:12px 14px;margin-bottom:12px}
+      .login{width:min(calc(100% - 40px),420px);margin:14vh auto;padding:28px;border:1px solid var(--line);border-radius:22px;background:var(--paper)}
+      .login button,.ask button{margin-top:12px;width:100%;height:46px;border:0;border-radius:12px;background:#4f8fe8;color:white;font-weight:700}
+      .rules{color:#c5cad3;font-size:14px}
+      .rules li{margin:6px 0}
+      .bad{color:var(--red)}
+      @media(max-width:560px){.amount{font-size:46px}.stats{grid-template-columns:1fr}.buy{grid-template-columns:1fr}}
+    </style>
+  </head>
+  <body>
+    <main class="wrap" id="app" hidden>
+      <div class="top"><h1>התוכנית</h1><a href="/">התזרים</a></div>
+      <div id="banner"></div>
+      <section class="hero" id="hero"></section>
+      <section class="card" id="ask"></section>
+      <section class="card"><h2>כסף שחייבים לשמור</h2><div id="kept"></div></section>
+      <section class="card"><h2>כסף שכבר מחויב</h2><div id="locked"></div><p class="note">החיוב בבנק לא נספר שוב. קונים פעם אחת, ביום הקנייה.</p></section>
+      <section class="card"><h2>מה נרשם החודש</h2><div id="rows"></div></section>
+      <section class="card rules">
+        <h2>איך מתנהלים</h2>
+        <ol>
+          <li>כל קנייה נרשמת באותו יום. מזומן, דיירקט או אשראי, פעם אחת.</li>
+          <li>לפני שמוציאים על משהו שמתחשק, בודקים כמה יישאר חופשי.</li>
+          <li>ביום ראשון בערב עוברים על מה שנרשם ועל מה שנשאר.</li>
+          <li>בסוף החודש מה שלא נוצל מהחופשי עובר לרזרבה. הקרנות נשארות בצד.</li>
+        </ol>
+      </section>
+    </main>
+    <form class="login" id="login" hidden>
+      <h1>התוכנית</h1>
+      <p class="sub">אותו מפתח של האתר.</p>
+      <label>מפתח</label>
+      <input name="key" type="password" autocomplete="current-password" required />
+      <button type="submit">כניסה</button>
+      <p class="note" id="login-error"></p>
+    </form>
+    <script type="module" src="/plan.js?v=1"></script>
+  </body>
+</html>

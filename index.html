@@ -22,6 +22,7 @@
     .today{color:#a3a7b2;font-size:12px}
     .top{align-items:flex-start}
     .icon-button,.outline-button,.small-button{background:transparent;border-color:#343844;color:#d5d8df;border-radius:12px}
+    a.outline-button{text-decoration:none;display:inline-flex;align-items:center}
     .hero{border:1px solid #2c313c;background:#16181e;box-shadow:none;border-radius:22px;padding:28px 22px 22px;margin-top:8px}
     .cycle{color:#a3a7b2}
     .label{color:#9aa0ab;font-size:14px}
@@ -56,7 +57,7 @@
     <main class="wrap" id="budget-app" hidden>
       <header class="top">
         <div class="brand"><div class="mark" aria-hidden="true">₪</div><div><h1>התקציב שלי</h1><div class="today" id="today-label"></div></div></div>
-        <div class="top-actions"><button class="outline-button" id="logout-button" type="button">יציאה</button><button class="icon-button" id="settings-button" type="button" aria-label="הגדרות">⚙</button></div>
+        <div class="top-actions"><a class="outline-button" href="/plan.html">התוכנית</a><button class="outline-button" id="logout-button" type="button">יציאה</button><button class="icon-button" id="settings-button" type="button" aria-label="הגדרות">⚙</button></div>
       </header>
       <section class="hero">
         <p class="cycle" id="cycle-title"></p>
