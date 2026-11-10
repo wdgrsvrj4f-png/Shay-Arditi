@@ -100,12 +100,9 @@ const esc = (value) => String(value).replace(/[&<>"']/g, (char) => ({
 
 function boot() {
   const root = document.querySelector("#app");
-  const key = "budget-logic-v1";
-  let ledger = { salaries: {}, entries: [], moves: [], salaryHidden: {} };
-  try {
-    const saved = JSON.parse(localStorage.getItem(key) || "null");
-    if (saved?.entries && saved?.moves) ledger = { salaries: saved.salaries || {}, entries: saved.entries, moves: saved.moves, salaryHidden: saved.salaryHidden || {} };
-  } catch { /* empty */ }
+  const empty = { salaries: {}, entries: [], moves: [], salaryHidden: {} };
+  let ledger = empty;
+  let cloudError = false;
   const now = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
   let month = now < ORIGIN ? ORIGIN : now;
   let open = false;
@@ -113,7 +110,32 @@ function boot() {
   let salaryDraft = "";
   let moveFund = null;
   let moveDraft = "";
-  const save = () => localStorage.setItem(key, JSON.stringify(ledger));
+  const save = () => {
+    fetch("/api/sync", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ledger }),
+    }).then((response) => {
+      cloudError = !response.ok;
+      draw();
+    }).catch(() => {
+      cloudError = true;
+      draw();
+    });
+  };
+  const pull = () => {
+    fetch("/api/sync").then((response) => {
+      if (!response.ok) throw new Error("sync");
+      return response.json();
+    }).then((data) => {
+      ledger = data.ledger || empty;
+      cloudError = false;
+      draw();
+    }).catch(() => {
+      cloudError = true;
+      draw();
+    });
+  };
   const methods = { debit: "דיירקט", credit: "אשראי", cash: "מזומן" };
 
   function draw() {
@@ -129,6 +151,7 @@ function boot() {
       </header>
       <section class="card center">
         <p class="hero ${view.luxuryLeft < 0 ? "bad" : ""}">${shekel(view.luxuryLeft)}</p>
+        ${cloudError ? `<p class="muted">לא נשמר בענן</p>` : ""}
         <button type="button" class="round" data-act="add">+ הוצאה</button>
       </section>
       ${ledger.salaryHidden[month] ? "" : `<section class="card">${salaryOpen ? `<input id="salary" inputmode="decimal" placeholder="משכורת שנכנסה החודש" value="${esc(salaryDraft)}">` : `<button type="button" class="field" data-act="salary">משכורת שנכנסה החודש</button>`}</section>`}
@@ -205,6 +228,10 @@ function boot() {
     draw();
   });
   draw();
+  pull();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pull();
+  });
 }
 
 if (typeof document !== "undefined") boot();

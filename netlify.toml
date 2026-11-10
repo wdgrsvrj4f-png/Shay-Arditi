@@ -21,6 +21,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/sync"
+  to = "/.netlify/functions/sync"
+  status = 200
+
+[[redirects]]
   from = "/api/telegram"
   to = "/.netlify/functions/telegram"
   status = 200
@@ -37,6 +42,16 @@
 
 [[headers]]
   for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/budget.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/budget.css"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
