@@ -75,7 +75,7 @@ export function viewMonth(ledger, month) {
   }
   throw new Error("before origin");
 }
-const esc = (value) => String(value).replace(/[&<>\"']/g, (char) => ({ "&": "&", "<": "<", ">": ">", '\"': """, "'": "&#39;" })[char]);
+const esc = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 function boot() {
   const root = document.querySelector("#app");
   const empty = { salaries: {}, entries: [], moves: [], salaryHidden: {} };
