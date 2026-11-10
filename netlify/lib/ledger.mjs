@@ -1,6 +1,6 @@
 const monthPattern = /^\d{4}-\d{2}$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-const fundIds = new Set(["food","charge","hair","wash","kids","school-stuff","allowance","care","insurance","girls-clothes","gifts","my-clothes","health","gadgets","events","vacation","license","savings"]);
+const fundIds = new Set(["food","charge","hair","wash","kids","school-stuff","allowance","care","insurance","girls-clothes","clothes","gifts","my-clothes","health","gadgets","events","vacation","license","savings"]);
 const methods = new Set(["debit", "credit", "cash"]);
 
 export const emptyLedger = { salaries: {}, entries: [], moves: [], salaryHidden: {} };
@@ -12,8 +12,7 @@ function validDate(value) {
   return typeof value === "string" && datePattern.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 function validAmount(value) {
-  const amount = Number(value);
-  return Number.isFinite(amount) && amount >= 0 && amount <= 1_000_000;
+  return Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 1_000_000;
 }
 function validId(value) {
   return typeof value === "string" && value.length > 0 && value.length <= 80;
