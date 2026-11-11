@@ -89,18 +89,22 @@ function boot() {
   let fundsOpen = true;
   let fixedOpen = false;
   let phase = "run";
+  let settingsOpen = false;
+  let introStarted = false;
   const methods = { debit: "דיירקט", credit: "אשראי", cash: "מזומן" };
   const notes = { debit: "האתר והבנק זזים היום.", credit: "האתר זז היום. הבנק זז רק ב־2, בלי להוריד שוב.", cash: "האתר זז היום. הבנק לא, כי השטר כבר יצא." };
   const save = () => fetch("/api/sync", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ledger }) }).then((response) => { cloudError = !response.ok; if (phase === "done") draw(); }).catch(() => { cloudError = true; if (phase === "done") draw(); });
   function draw() {
     const view = viewMonth(ledger, month);
-    const label = new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(month + "-01T00:00:00"));
+    const when = new Date(month + "-01T00:00:00");
+    const monthName = new Intl.DateTimeFormat("he-IL", { month: "long" }).format(when);
+    const yearName = String(when.getFullYear());
     const amount = Math.floor(view.luxuryLeft);
     const cardClass = phase === "done" ? "card center" : phase === "grow" ? "card center till grow" : "card center till";
     const fundTotal = view.funds.reduce((total, fund) => total + Math.floor(fund.left), 0);
     const fixedTotal = FIXED.reduce((total, item) => total + Math.ceil(item[2]), 0);
     root.innerHTML = `
-      <header class="top"><div><h1>${label}</h1></div><div class="nav"><button type="button" data-act="prev" ${month <= ORIGIN ? "disabled" : ""} aria-label="חודש קודם">‹</button><button type="button" data-act="next" aria-label="חודש הבא">›</button></div></header>
+      <header class="top"><button type="button" class="gear${settingsOpen ? " on" : ""}" data-act="settings" aria-label="הגדרות" aria-expanded="${settingsOpen}"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></button><div class="when"><h1>${monthName}</h1><span>${yearName}</span></div><div class="nav"><button type="button" data-act="prev" ${month <= ORIGIN ? "disabled" : ""} aria-label="חודש קודם">‹</button><button type="button" data-act="next" aria-label="חודש הבא">›</button></div></header>
       <section class="${cardClass}">${phase === "done" ? "" : '<span class="slot"></span><span class="coin c1"></span><span class="coin c2"></span><span class="coin c3"></span>'}<p class="hero ${view.luxuryLeft < 0 ? "bad" : ""}" dir="ltr">${phase === "done" ? whole(view.luxuryLeft) : "0"}</p>${cloudError ? '<p class="muted">לא נשמר בענן</p>' : ""}<button type="button" class="${phase === "done" ? "add" : "add hush"}" data-act="add" aria-label="הוצאה">+</button></section>
       <div class="head"><button type="button" class="fold" data-act="funds" aria-expanded="${fundsOpen}"><h2>קרנות</h2></button><b class="num" dir="ltr">${fundTotal}</b></div>
       <section class="card rows slow${fundsOpen ? "" : " shut"}">${view.funds.map((fund) => `<div class="line"><span class="name">${LOGOS[fund.id] || ""}${esc(fund.name)}</span><b class="num${fund.left < 0 ? " bad" : ""}" dir="ltr">${whole(fund.left)}</b></div>`).join("")}</section>
@@ -109,33 +113,47 @@ function boot() {
       <section class="card note"><h2>מה נרשם החודש</h2>${view.entries.length + view.moves.length === 0 ? '<p class="muted">עדיין אין הוצאות.</p>' : `${view.moves.map((move) => `<p class="muted">הועברו ${shown(move.amount)} מ${esc(FUNDS.find((fund) => fund[0] === fundBucket(move.fundId))?.[1] || "")} למותרות</p>`).join("")}${view.entries.map((entry) => `<div class="line"><span>${esc(entry.name)}<small>${entry.kind === "luxury" ? "מותרות" : esc(FUNDS.find((fund) => fund[0] === fundBucket(entry.fundId))?.[1] || "")} · ${methods[entry.method]}</small></span><span class="end"><b>${shown(entry.amount)}</b><button type="button" data-del="${esc(entry.id)}" aria-label="מחיקה">×</button></span></div>`).join("")}`}</section>
       ${ledger.salaryHidden[month] ? "" : `<section class="card">${salaryOpen ? `<input class="pay" id="salary" inputmode="decimal" placeholder="משכורת שנכנסה החודש" value="${esc(salaryDraft)}">` : '<button type="button" class="pay" data-act="salary">משכורת שנכנסה החודש</button>'}</section>`}
       ${open ? `<form class="sheet" id="expense"><h2>הוצאה</h2><input name="name" placeholder="על מה" required><input name="amount" inputmode="decimal" placeholder="סכום" required><select name="target"><option value="luxury">מותרות</option>${FUNDS.map((fund) => `<option value="${fund[0]}">${fund[1]}</option>`).join("")}</select><div class="methods">${["debit","credit","cash"].map((id) => `<button type="button" data-method="${id}" class="${(root.dataset.method || "debit") === id ? "on" : ""}">${methods[id]}</button>`).join("")}</div><p class="muted" id="method-note"></p><button class="round" type="submit">שמירה</button></form>` : ""}
+      <div class="roll${settingsOpen ? " on" : ""}" data-act="close-settings"><section class="sheet roll-page" aria-label="הגדרות"><h2>הגדרות</h2><button type="button" class="reset" data-act="reset">איפוס משכורת</button></section></div>
     `;
     const note = root.querySelector("#method-note");
     if (note) note.textContent = notes[root.dataset.method || "debit"];
     root.querySelector("#salary")?.focus();
-    if (phase === "run") {
-      const hero = root.querySelector(".hero");
-      const card = root.querySelector(".card.center");
+    if (phase === "run" && !introStarted) {
+      introStarted = true;
       const start = performance.now();
       const tick = (time) => {
         if (phase !== "run" && phase !== "grow") return;
         const t = Math.min(1, (time - start) / 3000);
+        const hero = root.querySelector(".hero");
+        const card = root.querySelector(".card.center");
         if (hero) hero.textContent = String(t >= 1 ? amount : Math.floor(amount * t));
         if (t < 1) requestAnimationFrame(tick);
         else { phase = "grow"; card?.classList.add("grow"); }
       };
       requestAnimationFrame(tick);
-      card?.addEventListener("animationend", (event) => {
-        if (event.animationName !== "grow") return;
-        phase = "done";
-        draw();
-      });
     }
   }
+  root.addEventListener("animationend", (event) => {
+    if (event.animationName !== "grow" || phase !== "grow") return;
+    phase = "done";
+    draw();
+  });
   root.addEventListener("click", (event) => {
     const target = event.target.closest("[data-act],[data-del],[data-method]");
-    if (!target || phase !== "done") return;
+    if (!target) return;
+    if (phase !== "done" && !["settings", "close-settings", "reset"].includes(target.dataset.act || "")) return;
+    if (target.dataset.act === "close-settings" && event.target.closest(".roll-page")) return;
     let changed = false;
+    if (target.dataset.act === "settings") { settingsOpen = !settingsOpen; open = false; }
+    if (target.dataset.act === "close-settings") settingsOpen = false;
+    if (target.dataset.act === "reset") {
+      delete ledger.salaries[month];
+      delete ledger.salaryHidden[month];
+      salaryDraft = "";
+      salaryOpen = false;
+      settingsOpen = false;
+      changed = true;
+    }
     if (target.dataset.act === "prev" && month > ORIGIN) month = shiftMonth(month, -1);
     if (target.dataset.act === "next") month = shiftMonth(month, 1);
     if (target.dataset.act === "add") open = !open;

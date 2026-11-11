@@ -1,26 +1,47 @@
+html, body { margin: 0; background: #101217; color: #eceae4; font: 16px/1.5 system-ui, sans-serif; overflow-x: clip; }
 :root { color-scheme: dark; --ink: #eceae4; --muted: #9c978e; --line: #2e333b; --paper: #171a20; --canvas: #101217; --luxury: #c5d5b4; --danger: #e7a398; --sand: #d8c4a0; }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: #101217; color: #eceae4; font: 16px/1.5 system-ui, sans-serif; overflow-x: clip; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 #app { position: relative; z-index: 1; width: min(100% - 28px, 640px); margin: 24px auto 48px; background: #101217; }
 .card.center { position: relative; }
 .card.center.till { transform: scale(0.62); transform-origin: center center; }
 .card.center.till.grow { animation: grow 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-@keyframes grow { from { transform: scale(0.62); } to { transform: scale(1); } }
+@keyframes grow {
+  from { transform: scale(0.62); }
+  to { transform: scale(1); }
+}
 .add.hush { opacity: 0; pointer-events: none; }
 .card.center.grow .add.hush { animation: showplus 0.275s cubic-bezier(0.16, 1, 0.3, 1) 0.175s forwards; }
 @keyframes showplus { to { opacity: 1; } }
 .slot { position: absolute; top: 14px; left: 22%; right: 22%; height: 8px; border-radius: 99px; background: #101217; }
 .coin { position: absolute; left: 50%; top: 10px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f6e7c8, #d8c4a0 42%, #9a7d48); animation: drop 0.275s linear infinite; }
-.card.center.grow .coin, .card.center.grow .slot { animation: coinout 0.2s ease forwards; }
+.card.center.grow .coin,
+.card.center.grow .slot { animation: coinout 0.2s ease forwards; }
 .c2 { margin-left: -40px; animation-delay: 0.08s; }
 .c3 { margin-left: 18px; animation-delay: 0.16s; }
-.card.center.grow .c2, .card.center.grow .c3 { animation-delay: 0s; }
-@keyframes drop { 0% { transform: translateY(-70px); opacity: 0; } 18% { opacity: 1; } 72% { opacity: 1; } 100% { transform: translateY(8px); opacity: 0; } }
+.card.center.grow .c2,
+.card.center.grow .c3 { animation-delay: 0s; }
+@keyframes drop {
+  0% { transform: translateY(-70px); opacity: 0; }
+  18% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { transform: translateY(8px); opacity: 0; }
+}
 @keyframes coinout { to { opacity: 0; } }
 .top, .row, .line, .end, .nav, .pair { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.top { margin-bottom: 16px; }
+.top { position: relative; z-index: 6; display: grid; grid-template-columns: 100px 1fr 100px; align-items: center; margin-bottom: 16px; }
+.when { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.when span { margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1; }
+.gear { justify-self: start; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--ink); }
+.gear svg { width: 22px; height: 22px; transition: transform 0.72s cubic-bezier(0.22, 1, 0.36, 1); }
+.gear.on svg { transform: rotate(-360deg); }
+.top .nav { justify-self: end; }
+.roll { position: fixed; inset: 0; z-index: 4; pointer-events: none; perspective: 1400px; background: transparent; transition: background 0.72s linear; }
+.roll.on { pointer-events: auto; background: rgba(0, 0, 0, 0.45); }
+.roll-page { min-height: 46vh; transform-origin: center bottom; transform: translateY(110%) rotateX(-78deg); transition: transform 0.72s cubic-bezier(0.22, 1, 0.36, 1); }
+.roll.on .roll-page { transform: translateY(0) rotateX(0deg); }
+.reset { height: 48px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--ink); }
 h1, h2, p { margin: 0; }
 h1 { font-size: 20px; font-weight: 500; }
 h2 { font-size: 20px; font-weight: 500; color: var(--ink); }
@@ -59,3 +80,4 @@ h2 { font-size: 20px; font-weight: 500; color: var(--ink); }
 .methods .on { border-color: var(--luxury); color: var(--luxury); }
 .pair .round, .sheet .round { margin: 0; width: 100%; }
 button:disabled { opacity: 0.4; }
+
