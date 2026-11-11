@@ -1,0 +1,7 @@
+.face-lock { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: #101217; }
+.face-lock button { display: flex; flex-direction: column; align-items: center; gap: 18px; border: 0; background: transparent; color: var(--ink); font-size: 17px; }
+.face-mark { position: relative; display: grid; place-items: center; width: 88px; height: 88px; }
+.face-mark svg { width: 72px; height: 72px; }
+.face-mark.scan::after { content: ""; position: absolute; left: 12px; right: 12px; height: 2px; border-radius: 99px; background: #b7c9a4; animation: sweep 1.1s ease-in-out infinite; }
+@keyframes sweep { 0% { top: 14px; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { top: 72px; opacity: 0; } }
+.face-lock .muted { position: absolute; bottom: 48px; }

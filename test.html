@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>התקציב</title>
+  <link rel="stylesheet" href="/budget.css">
+  <link rel="stylesheet" href="/face.css">
+</head>
+<body>
+  <div class="face-lock" id="face">
+    <button type="button" id="face-open">
+      <span class="face-mark" id="face-mark"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-face" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><path d="M9 9h.01"></path><path d="M15 9h.01"></path></svg></span>
+      פתח עם Face ID
+    </button>
+    <p class="muted" id="face-note" hidden></p>
+  </div>
+  <main id="app" hidden></main>
+  <script type="module" src="/face.js"></script>
+</body>
+</html>
