@@ -1,4 +1,4 @@
-import { sameOrigin } from "../lib/auth.mjs";
+import { requireAuth } from "../lib/auth.mjs";
 import { readJSON, reply } from "../lib/http.mjs";
 import { emptyLedger, validateLedger } from "../lib/ledger.mjs";
 import { budgetStore, readSnapshot } from "../lib/store.mjs";
@@ -14,7 +14,8 @@ async function snapshot(store) {
 }
 
 export default async function handler(request) {
-  if (!sameOrigin(request)) return reply({ error: "Forbidden origin" }, 403);
+  const denied = requireAuth(request);
+  if (denied) return denied;
   if (!["GET", "PUT"].includes(request.method)) return reply({ error: "Method not allowed" }, 405);
   try {
     const store = await budgetStore();
