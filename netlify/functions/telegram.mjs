@@ -1,7 +1,34 @@
 import { timingSafeEqual } from "node:crypto";
 import { budgetStore, readSnapshot, writeSnapshot } from '../lib/store.mjs';
 import { validateState } from '../lib/validation.mjs';
+import { validateLedger } from '../lib/ledger.mjs';
 import { readJSON } from '../lib/http.mjs';
+const lines = [
+  { id: "food", name: "מזון", words: /סופר|מכולת|שוק|קניות|אוכל|מזון|שופרסל/ },
+  { id: "kids", name: "בילויים", words: /בילוי|בילויים|ילדות/ },
+  { id: "clothes", name: "ביגוד", words: /ביגוד|בגדים/ },
+  { id: "allowance", name: "דמי כיס", words: /דמי כיס|דמ"כ|דמ״כ/ },
+  { id: "school-stuff", name: "ציוד", words: /ציוד/ },
+  { id: "charge", name: "טעינה", words: /טעינה/ },
+  { id: "hair", name: "תספורת", words: /תספורת|מספרה/ },
+];
+const lineCategory = {
+  food: "groceries",
+  kids: "leisure",
+  clothes: "other",
+  allowance: "other",
+  "school-stuff": "other",
+  charge: "transport",
+  hair: "leisure",
+};
+const linePlan = {
+  food: "food",
+  kids: "kids",
+  allowance: "allowance",
+  "school-stuff": "school-stuff",
+  charge: "charge",
+  hair: "hair",
+};
 const categories = {
   groceries: "אוכל וקניות",
   fuel: "דלק",
@@ -113,14 +140,17 @@ function parseMethod(text) {
   return null;
 }
 
-function parseCategory(text) {
-  if (/סופר|מכולת|שוק|קניות|אוכל/.test(text)) return "groceries";
-  if (/דלק|תדלוק|בנזין|תחנת דלק/.test(text)) return "fuel";
-  if (/מונית|רב.?קו|אוטובוס|רכבת|חניה|תחבורה/.test(text)) return "transport";
-  if (/חשמל|מים|ארנונה|אינטרנט|שכירות|בית/.test(text)) return "home";
-  if (/תרופה|רופא|מרפאה|בריאות|בית.?מרקחת/.test(text)) return "health";
-  if (/בילוי|סרט|קפה|מסעדה|בר|שווארמה|פיצה/.test(text)) return "leisure";
-  return "other";
+function parseLine(text) {
+  const hits = lines.filter((line) => line.words.test(text));
+  return hits.length === 1 ? hits[0] : null;
+}
+
+function lineKeyboard() {
+  const rows = [];
+  for (let index = 0; index < lines.length; index += 2) {
+    rows.push(lines.slice(index, index + 2).map((line) => ({ text: line.name, callback_data: `line:${line.id}` })));
+  }
+  return rows;
 }
 
 function expenseDate(text) {
@@ -186,6 +216,55 @@ return async function handler(request) {
   if (state.processedTelegramUpdates.includes(updateId)) return reply({ ok: true, duplicate: true });
   const chatId = String(chat.id);
   const text = String(update?.message?.text || "").trim();
+  const methodNames = { cash: "מזומן", debit: "דיירקט", credit: "אשראי" };
+
+  function recordedText(expense, line) {
+    return `נרשם: ${expense.amount} ₪ · ${expense.name} · ${line.name} · ${methodNames[expense.method]} · ${expense.date}`;
+  }
+
+  async function writeLedger(entry, removeId) {
+    const saved = await store.get("screen-ledger", { type: "json" });
+    const base = saved?.entries ? {
+      salaries: { ...(saved.salaries || {}) },
+      entries: saved.entries.filter((item) => item.id !== entry?.id && item.id !== removeId),
+      moves: [...(saved.moves || [])],
+      salaryHidden: { ...(saved.salaryHidden || {}) },
+    } : { salaries: {}, entries: [], moves: [], salaryHidden: {} };
+    if (entry) base.entries.unshift(entry);
+    const clean = validateLedger(base);
+    if (!clean) throw new Error("Invalid ledger expense");
+    await store.setJSON("screen-ledger", clean);
+  }
+
+  async function recordLine(line, draft, sourceId) {
+    const id = `telegram-${sourceId}`;
+    const name = draft.name || line.name;
+    const expense = {
+      id,
+      type: "expense",
+      name,
+      amount: draft.amount,
+      category: lineCategory[line.id],
+      method: draft.method,
+      date: draft.date,
+      budgeted: true,
+      ...(linePlan[line.id] ? { plan: linePlan[line.id] } : {}),
+    };
+    if (draft.method === "credit") expense.creditDueDate = creditDueDate(draft.date, state.settings);
+    if (!state.transactions.some((item) => item.id === id)) state.transactions.push(expense);
+    await writeLedger({
+      id,
+      month: draft.date.slice(0, 7),
+      date: draft.date,
+      name,
+      amount: draft.amount,
+      kind: "fund",
+      fundId: line.id,
+      method: draft.method,
+    });
+    state.pendingTelegramExpense = null;
+    return expense;
+  }
 
   if (!state.telegramChatId) {
     const [command, suppliedCode] = text.split(/\s+/, 2);
@@ -228,11 +307,34 @@ return async function handler(request) {
 
   if (update?.callback_query) {
     const callback = update.callback_query;
-    const expenseId = String(callback.data || "").replace(/^undo:/, "");
+    const data = String(callback.data || "");
+    if (data.startsWith("line:")) {
+      const line = lines.find((item) => item.id === data.slice(5));
+      const pending = state.pendingTelegramExpense;
+      if (!line || !pending?.amount || !pending.method || !pending.date) {
+        rememberUpdate(state, updateId);
+        await saveMergedState(state);
+        await callTelegram(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "לא מחכה להוצאה. תשלח אותה שוב." });
+        return reply({ ok: true });
+      }
+      const expense = await recordLine(line, pending, pending.sourceId || updateId);
+      rememberUpdate(state, updateId);
+      await saveMergedState(state);
+      await callTelegram(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "נרשם" });
+      await callTelegram(token, "editMessageText", {
+        chat_id: chat.id,
+        message_id: message.message_id,
+        text: recordedText(expense, line),
+        reply_markup: { inline_keyboard: [[{ text: "↩ ביטול", callback_data: `undo:${expense.id}` }]] },
+      });
+      return reply({ ok: true });
+    }
+    const expenseId = data.replace(/^undo:/, "");
     const expense = state.transactions.find(item => item.id === expenseId && item.type === "expense");
     if (expense) {
       state.transactions = state.transactions.filter(item => item.id !== expenseId);
       state.deletedTransactionIds = [...new Set([...(state.deletedTransactionIds || []), expenseId])].slice(-5_000);
+      await writeLedger(null, expenseId);
       rememberUpdate(state, updateId);
       await saveMergedState(state);
       await callTelegram(token, "answerCallbackQuery", { callback_query_id: callback.id, text: "ההוצאה בוטלה" });
@@ -259,7 +361,10 @@ return async function handler(request) {
     return reply({ ok: true });
   }
 
-  const combinedText = [state.pendingTelegramExpense?.text, text].filter(Boolean).join(" ").slice(-300);
+  const freshAmount = parseAmount(text);
+  const freshMethod = parseMethod(text);
+  const ownText = (freshAmount && freshMethod) || !state.pendingTelegramExpense?.text ? text : [state.pendingTelegramExpense.text, text].filter(Boolean).join(" ");
+  const combinedText = ownText.slice(-300);
   const amount = parseAmount(combinedText);
   const method = parseMethod(combinedText);
   if (!amount || !method) {
@@ -272,28 +377,34 @@ return async function handler(request) {
   }
 
   const date = expenseDate(combinedText);
-  const category = parseCategory(combinedText);
-  const name = expenseName(combinedText) || categories[category];
-  const expense = {
-    id: `telegram-${updateId}`,
-    type: "expense",
-    name,
+  const name = expenseName(combinedText) || "הוצאה";
+  const line = parseLine(combinedText);
+  const draft = {
+    text: combinedText,
     amount,
-    category,
     method,
     date,
-    budgeted: true,
+    name,
+    sourceId: (!freshAmount || !freshMethod) && state.pendingTelegramExpense?.sourceId ? state.pendingTelegramExpense.sourceId : updateId,
   };
-  if (method === "credit") expense.creditDueDate = creditDueDate(date, state.settings);
-  state.transactions.push(expense);
-  state.pendingTelegramExpense = null;
+  if (!line) {
+    state.pendingTelegramExpense = draft;
+    rememberUpdate(state, updateId);
+    await saveMergedState(state);
+    await callTelegram(token, "sendMessage", {
+      chat_id: chat.id,
+      text: `מאיזו שורה להוריד ${amount} על ${name}?`,
+      reply_markup: { inline_keyboard: lineKeyboard() },
+    });
+    return reply({ ok: true, needsLine: true });
+  }
+
+  const expense = await recordLine(line, draft, draft.sourceId);
   rememberUpdate(state, updateId);
   await saveMergedState(state);
-
-  const methodNames = { cash: "מזומן", debit: "דיירקט", credit: "אשראי" };
   await callTelegram(token, "sendMessage", {
     chat_id: chat.id,
-    text: `נרשם: ${amount} ₪ · ${name} · ${methodNames[method]} · ${date}${method === 'cash' ? ' · לא יורד מהמשכורת' : ''}`,
+    text: recordedText(expense, line),
     reply_markup: { inline_keyboard: [[{ text: "↩ ביטול", callback_data: `undo:${expense.id}` }]] },
   });
   return reply({ ok: true });

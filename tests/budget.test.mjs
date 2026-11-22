@@ -136,7 +136,7 @@ test('Telegram retries concurrent storage writes and deduplicates delivery', asy
   process.env.TELEGRAM_BOT_TOKEN = 'test-token'; process.env.TELEGRAM_WEBHOOK_SECRET = 'test-webhook'; process.env.TELEGRAM_PAIRING_CODE = 'test-pair';
   const initial = demoData(); initial.telegramChatId = '123'; const store = memoryStore(initial);
   const replies = []; const handler = createTelegramHandler(async () => store, async (token, method, body) => { replies.push({ method, body }); return { ok: true }; });
-  const update = { update_id: 75, message: { chat: { id: 123, type: 'private' }, text: 'קפה 42 במזומן' } };
+  const update = { update_id: 75, message: { chat: { id: 123, type: 'private' }, text: 'סופר 42 במזומן' } };
   const send = () => handler(request('/api/telegram', { method: 'POST', body: update, authorized: false, headers: { 'x-telegram-bot-api-secret-token': 'test-webhook' } }));
   const results = await Promise.all([send(), send()]);
   assert.ok(results.every(r => r.status === 200));
@@ -144,6 +144,23 @@ test('Telegram retries concurrent storage writes and deduplicates delivery', asy
   assert.equal(saved.transactions.filter(t => t.id === 'telegram-75').length, 1);
   assert.equal(replies.length, 1);
   assert.equal((await handler(request('/api/telegram', { method: 'POST', body: update, authorized: false }))).status, 401);
+});
+test('an unclear purchase asks for a line and the button records it there', async () => {
+  process.env.TELEGRAM_BOT_TOKEN = 'test-token'; process.env.TELEGRAM_WEBHOOK_SECRET = 'test-webhook'; process.env.TELEGRAM_PAIRING_CODE = 'test-pair';
+  const initial = demoData(); initial.telegramChatId = '123'; const store = memoryStore(initial);
+  const replies = []; const handler = createTelegramHandler(async () => store, async (token, method, body) => { replies.push({ method, body }); return { ok: true }; });
+  const headers = { 'x-telegram-bot-api-secret-token': 'test-webhook' };
+  const asked = await handler(request('/api/telegram', { method: 'POST', body: { update_id: 80, message: { chat: { id: 123, type: 'private' }, text: '100 קולה זירו במזומן' } }, authorized: false, headers }));
+  assert.equal(asked.status, 200);
+  assert.match(replies[0].body.text, /מאיזו שורה/);
+  assert.equal(replies[0].body.reply_markup.inline_keyboard.flat().some(button => button.callback_data === 'line:food'), true);
+  assert.equal((await store.get('shared-budget')).transactions.some(item => item.id === 'telegram-80'), false);
+  const chosen = await handler(request('/api/telegram', { method: 'POST', body: { update_id: 81, callback_query: { id: 'cb', data: 'line:food', message: { message_id: 5, chat: { id: 123, type: 'private' } } } }, authorized: false, headers }));
+  assert.equal(chosen.status, 200);
+  const ledger = await store.get('screen-ledger');
+  assert.equal(ledger.entries[0].fundId, 'food');
+  assert.equal(ledger.entries[0].amount, 100);
+  assert.equal(ledger.entries[0].name, 'קולה זירו');
 });
 test('browser finance functions show correct balance with monthly debts and restore principal on deletion', async () => {
   const source = (await readFile(new URL('../app.js', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '');
